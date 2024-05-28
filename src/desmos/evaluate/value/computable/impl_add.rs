@@ -1,4 +1,4 @@
-use crate::desmos::evaluate::{POOL_NUMBER, POOL_POINT};
+
 use crate::pooled_vec::PooledVec;
 use std::iter::Sum;
 use std::ops::Add;

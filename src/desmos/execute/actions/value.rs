@@ -1,5 +1,5 @@
 use crate::desmos::evaluate::{UserIdent, VarValue};
-use crate::desmos::execute::actions::ActIdent;
+
 use std::iter::Sum;
 use std::ops::Add;
 

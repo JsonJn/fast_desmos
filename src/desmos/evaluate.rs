@@ -248,14 +248,24 @@ impl Evaluable for EvalTree {
                                 unreachable!("Parameter count does not match function definition")
                             }
 
-                            for (&id, val) in params.iter().zip(p_vals) {
-                                context.set_value(id, val);
-                            }
+                            let old_vals: Vec<_> = params
+                                .iter()
+                                .zip(p_vals)
+                                .map(|(&id, val)| {
+                                    let old_val = context.try_get_value(id);
+                                    context.set_value(id, val);
+                                    old_val
+                                })
+                                .collect();
 
                             let v = expr.evaluate(functions, context);
 
-                            for &id in params {
-                                context.unset(id);
+                            for (&id, old_val) in params.iter().zip(old_vals) {
+                                if let Some(val) = old_val {
+                                    context.set_value(id, val);
+                                } else {
+                                    context.unset(id);
+                                }
                             }
 
                             v

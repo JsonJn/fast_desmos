@@ -1,7 +1,7 @@
 use super::super::list::CompList;
 use super::super::primitive::CompPrim;
 use super::Computable;
-use crate::desmos::evaluate::{Point, POOL_NUMBER, POOL_POINT};
+use crate::desmos::evaluate::{Point, POOL_POINT};
 use crate::pooled_vec::PooledVec;
 use std::iter::Product;
 use std::ops::Mul;

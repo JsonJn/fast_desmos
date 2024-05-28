@@ -76,7 +76,7 @@ pub fn window(params: Desmos) {
         .build();
 
     let fps = min_steps_ms.map(|v| 1000.0 / v).unwrap_or(60.0);
-    // rl.set_target_fps(fps as u32);
+    rl.set_target_fps(fps as u32);
 
     let Viewport { x_range, y_range } = viewport;
 

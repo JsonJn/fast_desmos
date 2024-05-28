@@ -2,9 +2,9 @@ use std::fmt::{Debug, Formatter};
 use std::mem::{size_of, ManuallyDrop};
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::sync::RwLock;
-use std::{cmp, mem, ptr};
+use std::{cmp, mem};
 
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxHashMap};
 
 type CloneNumber = u16;
 

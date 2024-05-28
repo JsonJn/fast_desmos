@@ -1,5 +1,5 @@
 use super::{ActExpr, ActIdent, ActValue};
-use crate::desmos::evaluate::{Ident, UserIdent};
+use crate::desmos::evaluate::{UserIdent};
 use rustc_hash::FxHashMap;
 
 #[derive(Default)]

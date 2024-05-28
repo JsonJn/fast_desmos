@@ -1,12 +1,9 @@
 use crate::desmos::evaluate::{
-    Color, CompList, CompPrim, EvalExpr, EvalKind, EvalTree, Ident, NonCompList, NonCompPrim,
-    Point, Polygon, PrimList, Primitive, UserIdent, VarValue, IDENTIFIERS,
+    Color, EvalExpr, EvalKind, EvalTree, Ident, Point, Polygon, UserIdent, IDENTIFIERS,
 };
 use crate::desmos::{parsing, Clickable};
+use once_cell::sync::Lazy;
 use std::collections::VecDeque;
-use std::convert::identity;
-use std::slice;
-use std::slice::Windows;
 
 mod drawable_list;
 
@@ -219,6 +216,14 @@ pub struct ParametricDomain {
     pub min: EvalExpr,
     pub max: EvalExpr,
 }
+
+impl Default for ParametricDomain {
+    fn default() -> Self {
+        Self::from_options(None, None)
+    }
+}
+
+pub static DOMAIN_DEFAULT: Lazy<ParametricDomain> = Lazy::new(ParametricDomain::default);
 
 impl ParametricDomain {
     pub fn from_options(min: Option<EvalExpr>, max: Option<EvalExpr>) -> Self {

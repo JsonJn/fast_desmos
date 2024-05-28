@@ -1,9 +1,9 @@
 use crate::desmos::evaluate::value::{CompPrim, Computable, Primitive, VarValue};
 use crate::desmos::evaluate::{POOL_BOOL, POOL_PRIMITIVE, POOL_VAR_VALUE};
-use crate::pooled_vec::{Id, PooledVec, VecPool};
+use crate::pooled_vec::{Id, PooledVec};
 use crate::take_pat;
-use once_cell::sync::Lazy;
-use std::hint::unreachable_unchecked;
+
+
 use std::mem::MaybeUninit;
 
 pub(super) fn pervasive_apply_non_prim_known<const ADIC: usize>(
@@ -103,9 +103,9 @@ pub(super) fn pervasive_apply_variadic(
     mut func: impl FnMut(&mut dyn Iterator<Item = Primitive>) -> Primitive,
 ) -> VarValue {
     if params.iter().all(|v| matches!(v, VarValue::Prim(_))) {
-        let values = (&mut params
+        let values = &mut params
             .into_iter()
-            .map(|v| take_pat!(v => x from VarValue::Prim(x))));
+            .map(|v| take_pat!(v => x from VarValue::Prim(x)));
 
         VarValue::Prim(func(values))
     } else {

@@ -1,5 +1,5 @@
 use crate::desmos::evaluate::value::{CompList, CompPrim, Computable};
-use crate::desmos::evaluate::{POOL_NUMBER, POOL_POINT};
+
 use std::ops::Neg;
 
 impl Neg for CompPrim {

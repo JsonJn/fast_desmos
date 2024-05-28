@@ -1,4 +1,4 @@
-use crate::desmos::evaluate::{CompList, CompPrim, Computable, POOL_NUMBER};
+use crate::desmos::evaluate::{CompList, CompPrim, Computable};
 use crate::pooled_vec::PooledVec;
 
 macro_rules! exp_type_error {

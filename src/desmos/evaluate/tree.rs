@@ -1,9 +1,10 @@
 use crate::pooled_vec::Id;
-use std::cell::RefCell;
+use std::cell::{OnceCell, RefCell};
 use std::cmp::Ordering;
+use std::fmt::{Debug, Formatter};
 use std::iter;
-use std::sync::atomic;
 use std::sync::atomic::AtomicU32;
+use std::sync::{atomic, OnceLock};
 
 use crate::desmos::evaluate::context::{Functions, ValueContext};
 use crate::desmos::evaluate::pervasive_applies::{
@@ -13,8 +14,8 @@ use crate::desmos::evaluate::value::{
     Color, CompList, CompPrim, Computable, Point, Polygon, PrimList, Primitive, VarValue,
 };
 use crate::desmos::evaluate::{
-    pervasive_apply_variadic, Evaluable, POOL_INDICES, POOL_NUMBER, POOL_POINT, POOL_PRIMITIVE,
-    POOL_SORT_PAIRS,
+    pervasive_apply_variadic, Evaluable, IDENTIFIERS, POOL_INDICES, POOL_NUMBER, POOL_POINT,
+    POOL_PRIMITIVE, POOL_SORT_PAIRS,
 };
 use crate::desmos::execute::CanDepend;
 use crate::desmos::parsing::{AddOrSub, Element, InequalityType, SumOrProduct};
@@ -25,13 +26,13 @@ use crate::take_pat;
 #[derive(PartialEq, Debug)]
 pub struct EvalExpr {
     pub expr: Box<EvalTree>,
-    pub cache: RefCell<Option<Option<VarValue>>>,
+    pub cache: Option<OnceLock<VarValue>>,
 }
 
 impl EvalExpr {
     pub fn new(tree: EvalTree) -> Self {
         Self {
-            cache: tree.get_deps().is_empty().then_some(None).into(),
+            cache: tree.get_deps().is_empty().then(OnceLock::new),
             expr: Box::new(tree),
         }
     }
@@ -41,25 +42,33 @@ impl EvalExpr {
     }
 
     pub fn get_cached(&self) -> Option<VarValue> {
-        let cache = self.cache.borrow().clone();
-        cache.flatten()
+        self.cache.as_ref().and_then(|v| v.get().cloned())
     }
 
     pub fn can_cache(&self) -> bool {
-        self.cache.borrow().is_some()
+        self.cache.is_some()
     }
 
     pub fn set_cache(&self, value: &VarValue) {
-        let mut cache = self.cache.borrow_mut();
-        let Some(cache) = cache.as_mut() else {
-            unreachable!("Setting cache requires that it be cachable");
-        };
-        *cache = Some(value.clone());
+        if let Some(cache) = &self.cache {
+            let Ok(_) = cache.set(value.clone()) else {
+                unreachable!("Cannot cache already cached")
+            };
+        } else {
+            unreachable!("Caching requires that it be cachable")
+        }
     }
 }
 
-#[derive(PartialEq, Debug, Copy, Clone, Eq, Hash)]
+#[derive(PartialEq, Copy, Clone, Eq, Hash)]
 pub struct UserIdent(pub usize);
+
+impl Debug for UserIdent {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let name = IDENTIFIERS.int_to_name(*self).unwrap();
+        write!(f, "UserIdent(\"{name}\")")
+    }
+}
 
 impl From<UserIdent> for usize {
     fn from(value: UserIdent) -> Self {
@@ -760,7 +769,7 @@ impl Conditional {
                     .map(|v| -> Computable { v.evaluate(functions, context).try_into().unwrap() })
                     .collect::<Vec<_>>();
 
-                pervasive_apply_comp_variadic_bool(id, values, |mut vals| {
+                pervasive_apply_comp_variadic_bool(id, values, |vals| {
                     let mut last = vals.next().unwrap();
                     for (next, &c) in vals.zip(comp) {
                         let cmp = last.cmp(next).unwrap();
@@ -784,7 +793,7 @@ impl Conditional {
                     .map(|v| -> Computable { v.evaluate(functions, context).try_into().unwrap() })
                     .collect::<Vec<_>>();
 
-                pervasive_apply_comp_variadic_bool(id, values, |mut vals| {
+                pervasive_apply_comp_variadic_bool(id, values, |vals| {
                     let mut last = vals.next().unwrap();
                     for next in vals {
                         let correct = last == next;

@@ -5,7 +5,7 @@ pub use listables::*;
 pub use primitive::*;
 
 use crate::desmos::evaluate::{
-    Builtins, EvalTree, Ident, TriadicPervasive, UserIdent, VariadicPervasive,
+    UserIdent,
 };
 use crate::pooled_vec::PooledVec;
 

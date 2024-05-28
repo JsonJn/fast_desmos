@@ -75,6 +75,10 @@ impl ValueContext {
         unreachable!("Uninitialized variable: {ident:?}");
     }
 
+    pub fn try_get_value(&self, ident: UserIdent) -> Option<VarValue> {
+        self.values.get(&ident).cloned()
+    }
+
     pub fn is_initialized(&self, ident: UserIdent) -> bool {
         self.values.contains_key(&ident)
     }

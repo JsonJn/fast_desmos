@@ -1,4 +1,4 @@
-use crate::desmos::evaluate::{Conditional, EvalExpr, Ident, UserIdent};
+use crate::desmos::evaluate::{Conditional, EvalExpr, UserIdent};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct ActIdent(pub usize);

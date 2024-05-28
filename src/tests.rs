@@ -9,7 +9,7 @@ use std::io::Write;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use crate::desmos::evaluate::{Evaluable, Point, ToEval, ValueContext, VarValue};
+use crate::desmos::evaluate::{Evaluable, Functions, Point, ToEval, ValueContext, VarValue};
 use crate::desmos::parsing::{Lexer, Parser};
 
 fn parse_value(b: &str) -> VarValue {
@@ -156,14 +156,15 @@ fn test_eval_pair(expr: String, val: &VarValue) -> TestResult {
     };
     let parsing = start.elapsed();
 
-    let context = ValueContext::new();
+    let mut context = ValueContext::default();
+    let functions = Functions::default();
 
     let start = Instant::now();
     let to_evaled = parsed.to_eval();
     let to_eval = start.elapsed();
 
     let start = Instant::now();
-    let value = to_evaled.evaluate(&context);
+    let value = to_evaled.evaluate(&functions, &mut context);
     let evaluate = start.elapsed();
 
     if value.ne(val) {

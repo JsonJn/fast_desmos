@@ -9,7 +9,7 @@ mod impl_mul;
 mod impl_neg;
 mod impl_pow;
 
-pub use impl_pow::Pow;
+
 
 #[derive(Debug, Clone)]
 pub enum Computable {

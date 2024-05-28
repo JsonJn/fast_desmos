@@ -14,7 +14,7 @@ use crate::desmos::execute::actions::{ActFuncBuilder, ActFunctions, ActValue};
 use crate::desmos::execute::dependency::reorder_inplace;
 use crate::desmos::rendering::drawables::{
     DrawColor, DrawPoints, DrawPolygons, Drawable, DrawableList, DrawableType, ExplicitEq,
-    ExplicitType, ParametricDomain, ParametricEq, Points, Polygons,
+    ExplicitType, ParametricDomain, ParametricEq, Points, Polygons, DOMAIN_DEFAULT,
 };
 use crate::desmos::{parsing, Clickable, DesmosCell, Options};
 
@@ -110,7 +110,7 @@ fn vv_to_drawable<'a>(
             },
         draw_index,
         draw_color: color,
-        domain,
+        domain: _,
         clickable,
     } = drawable_options;
     let draw_index = *draw_index;
@@ -282,7 +282,7 @@ impl Statement<'_> {
                             line_options: options
                                 .line_on_off
                                 .on_or_default_then(&options.line_options),
-                            domain: domain.as_ref().unwrap(),
+                            domain: domain.as_ref().unwrap_or_else(|| &DOMAIN_DEFAULT),
                         }),
                         clickable,
                     })
@@ -435,26 +435,28 @@ pub fn convert_cells(stmts: Vec<DesmosCell>) -> (AllContext, Statements<'static>
 
     println!("{:?}", IDENTIFIERS.idents);
 
-    let indices = topological_sort(dbg!(var_defs
-        .iter()
-        .map(|(ident, expr, _, _, _, _, _)| {
-            let mut deps = expr.get_deps();
+    let indices = topological_sort(
+        var_defs
+            .iter()
+            .map(|(ident, expr, _, _, _, _, _)| {
+                let mut deps = expr.get_deps();
 
-            for UserIdent(x) in IdentifierStorer::RESERVED_IDENTS {
-                while let Some(i) = deps.iter().position(|&v| v == x) {
-                    deps.swap_remove(i);
+                for UserIdent(x) in IdentifierStorer::RESERVED_IDENTS {
+                    while let Some(i) = deps.iter().position(|&v| v == x) {
+                        deps.swap_remove(i);
+                    }
                 }
-            }
 
-            for &UserIdent(x) in &func_idents {
-                while let Some(i) = deps.iter().position(|&v| v == x) {
-                    deps.swap_remove(i);
+                for &UserIdent(x) in &func_idents {
+                    while let Some(i) = deps.iter().position(|&v| v == x) {
+                        deps.swap_remove(i);
+                    }
                 }
-            }
 
-            ((*ident).into(), deps)
-        })
-        .collect::<Vec<_>>()));
+                ((*ident).into(), deps)
+            })
+            .collect::<Vec<_>>(),
+    );
 
     reorder_inplace(&mut var_defs, indices);
     let mut statements: Vec<_> = var_defs

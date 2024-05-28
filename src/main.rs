@@ -44,9 +44,10 @@ fn main() {
         ANALYTIC_IDEAL_GAS = "https://www.desmos.com/calculator/kjrqurcozt";
         SPINNY_CUBE = "https://www.desmos.com/calculator/epretb6vnj";
         SNUB_CUBE = "https://www.desmos.com/calculator/jroixxyk1e";
+        VECTOR_FIELD = "https://www.desmos.com/calculator/g25eqqco4m";
     }
 
-    let desmos = Desmos::from_url(SPINNY_CUBE).unwrap();
+    let desmos = Desmos::from_url(VECTOR_FIELD).unwrap();
     desmos::rendering::window(desmos);
 
     // println!("{:?}", size_of::<EvalTree>());

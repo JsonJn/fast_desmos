@@ -17,7 +17,7 @@ pub mod rendering;
 use crate::desmos::rendering::drawables::{
     DrawColor, FillOptions, Label, LineOptions, ParametricDomain, PointOptions,
 };
-use rendering::drawables;
+
 
 #[derive(Debug, Copy, Clone, Default)]
 pub enum OnOffState {
