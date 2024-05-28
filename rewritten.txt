@@ -1,0 +1,34 @@
+Some(
+    ActFunction(
+        ActFuncDef {
+            func: Ident(
+                "Func",
+            ),
+            params: [
+                Ident(
+                    "p0",
+                ),
+            ],
+            expr: ActExpr {
+                actions: [
+                    Raw(
+                        RawAction {
+                            ident: Ident(
+                                "A",
+                            ),
+                            expr: Expression {
+                                expr: Below(
+                                    Ident(
+                                        Ident(
+                                            "B",
+                                        ),
+                                    ),
+                                ),
+                            },
+                        },
+                    ),
+                ],
+            },
+        },
+    ),
+)
