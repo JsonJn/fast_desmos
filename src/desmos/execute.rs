@@ -10,11 +10,12 @@ use crate::desmos::evaluate::{
     FunctionsBuilder, IdentifierStorer, NonCompList, NonCompPrim, PrimList, Primitive, ToEval,
     UserIdent, ValueContext, VarValue, IDENTIFIERS,
 };
+use crate::desmos::evaluate::{Points, Polygons};
 use crate::desmos::execute::actions::{ActFuncBuilder, ActFunctions, ActValue};
 use crate::desmos::execute::dependency::reorder_inplace;
 use crate::desmos::rendering::drawables::{
     DrawColor, DrawPoints, DrawPolygons, Drawable, DrawableList, DrawableType, ExplicitEq,
-    ExplicitType, ParametricDomain, ParametricEq, Points, Polygons, DOMAIN_DEFAULT,
+    ExplicitType, ParametricDomain, ParametricEq, DOMAIN_DEFAULT,
 };
 use crate::desmos::{parsing, Clickable, DesmosCell, Options};
 
@@ -239,7 +240,7 @@ impl Statement<'_> {
                 }
             }
             SpecialDeps::ExplicitY => {
-                if let Some(IdentifierStorer::IDENT_X) = ident {
+                if matches!(ident, Some(IdentifierStorer::IDENT_X)) {
                     if !options.hidden {
                         Some(Drawable {
                             draw_index,

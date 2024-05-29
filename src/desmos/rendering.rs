@@ -4,13 +4,14 @@ use raylib::ffi;
 use raylib::prelude::{Camera2D, KeyboardKey, RaylibDraw, RaylibMode2DExt, Vector2};
 
 use crate::desmos::evaluate::{
-    Color, Colors, Conditional, EvalKind, IdentifierStorer, Numbers, Point, Polygon, VarValue,
+    Color, Colors, Conditional, EvalKind, IdentifierStorer, Numbers, Point, Points, Polygon,
+    Primitive, VarValue,
 };
 use crate::desmos::execute::convert_cells;
 use crate::desmos::parsing::InequalityType;
 use crate::desmos::rendering::drawables::{
     DrawColor, DrawPoints, DrawPolygons, Drawable, DrawableType, ExplicitEq, ExplicitType,
-    FillOptions, LineOptions, PointOptions,
+    FillOptions, LineOptions, ParametricDomain, ParametricEq, PointOptions,
 };
 use crate::desmos::{Desmos, Viewport};
 
@@ -146,7 +147,62 @@ pub fn window(params: Desmos) {
 
                     #[allow(unused_variables)]
                     match kind {
-                        DrawableType::Parametric(_) => todo!("parametric drawing"),
+                        DrawableType::Parametric(ParametricEq {
+                            equation,
+                            line_options,
+                            domain,
+                        }) => {
+                            if let Some(LineOptions {
+                                opacity,
+                                kind,
+                                thickness,
+                            }) = line_options
+                            {
+                                let opacity: Numbers = context
+                                    .evaluate(opacity)
+                                    .try_into()
+                                    .expect("Opacity must be numbers");
+                                let thickness: Numbers = context
+                                    .evaluate(thickness)
+                                    .try_into()
+                                    .expect("Thickness must be numbers");
+
+                                let ParametricDomain { min, max } = domain;
+                                let [min, max]: [f64; 2] = [min, max].map(|expr| {
+                                    let comp: Primitive = context
+                                        .evaluate(expr)
+                                        .try_into()
+                                        .expect("Parametric bounds must be number");
+                                    comp.try_into().expect("Parametric bounds must be number")
+                                });
+
+                                let [start, end]: [Points; 2] = [min, max].map(|num| {
+                                    context
+                                        .evaluate_with(
+                                            equation,
+                                            IdentifierStorer::IDENT_T,
+                                            VarValue::number(num),
+                                        )
+                                        .try_into()
+                                        .expect("Parametric drawing requires points!")
+                                });
+
+                                for ((start, end), (thick, (color, opacity))) in
+                                    start.into_iter().zip(end.into_iter()).zip(
+                                        thickness.into_iter_rep().zip(
+                                            color.into_iter_rep().zip(opacity.into_iter_rep()),
+                                        ),
+                                    )
+                                {
+                                    d2.draw_line_ex(
+                                        start,
+                                        end,
+                                        thick as f32 / camera.zoom,
+                                        color.with_opacity(opacity),
+                                    )
+                                }
+                            }
+                        }
                         DrawableType::Explicit(ExplicitEq {
                             line_options,
                             equation,
@@ -273,29 +329,20 @@ pub fn window(params: Desmos) {
                                                     .expect("Explicit function must be numbers")
                                             });
 
-                                        match (min_dest, max_dest) {
-                                            (Numbers::One(min_dest), Numbers::One(max_dest)) => d2
-                                                .draw_line_ex(
-                                                    kind.get_point(min, min_dest),
-                                                    kind.get_point(max, max_dest),
-                                                    thickness.first() as f32 / camera.zoom,
-                                                    color.first().with_opacity(opacity.first()),
-                                                ),
-                                            (min_dest, max_dest) => {
-                                                for (
-                                                    (min_dest, max_dest),
-                                                    ((thickness, opacity), color),
-                                                ) in min_dest.into_iter().zip(max_dest).zip(
-                                                    thickness.into_iter().zip(opacity).zip(color),
-                                                ) {
-                                                    d2.draw_line_ex(
-                                                        kind.get_point(min, min_dest),
-                                                        kind.get_point(max, max_dest),
-                                                        thickness as f32 / camera.zoom,
-                                                        color.with_opacity(opacity),
-                                                    );
-                                                }
-                                            }
+                                        for ((min_dest, max_dest), ((thickness, opacity), color)) in
+                                            min_dest.into_iter().zip(max_dest.into_iter()).zip(
+                                                thickness
+                                                    .into_iter_rep()
+                                                    .zip(opacity.into_iter_rep())
+                                                    .zip(color.into_iter_rep()),
+                                            )
+                                        {
+                                            d2.draw_line_ex(
+                                                kind.get_point(min, min_dest),
+                                                kind.get_point(max, max_dest),
+                                                thickness as f32 / camera.zoom,
+                                                color.with_opacity(opacity),
+                                            );
                                         }
                                     }
                                     (min_bound, max_bound) => todo!("Variable bounds"),
@@ -326,10 +373,12 @@ pub fn window(params: Desmos) {
                                     .try_into()
                                     .expect("Opacity must be a number");
 
-                                for (&p, ((&diameter, &opacity), &color)) in points
-                                    .iter()
-                                    .zip(diameter.iter().zip(opacity.iter()).zip(color.iter()))
-                                {
+                                for (&p, ((&diameter, &opacity), &color)) in points.iter().zip(
+                                    diameter
+                                        .iter_rep()
+                                        .zip(opacity.iter_rep())
+                                        .zip(color.iter_rep()),
+                                ) {
                                     const A: f32 = 0.923_879_5;
                                     const B: f32 = std::f32::consts::FRAC_1_SQRT_2;
                                     const C: f32 = 0.382_683_43;
@@ -403,10 +452,12 @@ pub fn window(params: Desmos) {
 
                                 //TODO: line type
 
-                                for (ps, ((&opacity, &thickness), color)) in points
-                                    .windows(2)
-                                    .zip(opacity.iter().zip(thickness.iter()).zip(color))
-                                {
+                                for (ps, ((&opacity, &thickness), color)) in points.windows(2).zip(
+                                    opacity
+                                        .iter_rep()
+                                        .zip(thickness.iter_rep())
+                                        .zip(color.into_iter_rep()),
+                                ) {
                                     let line_color = color.with_opacity(opacity);
                                     let [this, next]: [Point; 2] = ps.try_into().unwrap();
                                     d2.draw_line_ex(
@@ -431,8 +482,10 @@ pub fn window(params: Desmos) {
                                     .try_into()
                                     .expect("Opacity must be a number");
 
-                                for ((points, &opacity), &color) in
-                                    polygons.iter().zip(opacity.iter()).zip(color.iter())
+                                for ((points, &opacity), &color) in polygons
+                                    .iter()
+                                    .zip(opacity.iter_rep())
+                                    .zip(color.iter_rep())
                                 {
                                     let fill_color = color.with_opacity(opacity);
                                     let Polygon(points) = points;
@@ -464,9 +517,13 @@ pub fn window(params: Desmos) {
                                     .try_into()
                                     .expect("Opacity must be a number");
 
-                                for (Polygon(points), ((&opacity, &thickness), &color)) in polygons
-                                    .into_iter()
-                                    .zip(opacity.iter().zip(thickness.iter()).zip(color.iter()))
+                                for (Polygon(points), ((&opacity, &thickness), &color)) in
+                                    polygons.into_iter().zip(
+                                        opacity
+                                            .iter_rep()
+                                            .zip(thickness.iter_rep())
+                                            .zip(color.iter_rep()),
+                                    )
                                 {
                                     let line_color = color.with_opacity(opacity);
                                     for i in 0..points.len() {

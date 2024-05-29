@@ -1,15 +1,15 @@
-use crate::desmos::evaluate::{
-    Color, EvalExpr, EvalKind, EvalTree, Ident, Point, Polygon, UserIdent, IDENTIFIERS,
-};
-use crate::desmos::{parsing, Clickable};
-use once_cell::sync::Lazy;
 use std::collections::VecDeque;
 
-mod drawable_list;
+use once_cell::sync::Lazy;
 
-use crate::iterator::{OptIntoIter, OptIter, OptWindowIter};
-use crate::pooled_vec::PooledVec;
 pub use drawable_list::DrawableList;
+
+use crate::desmos::evaluate::{
+    Color, EvalExpr, EvalKind, EvalTree, Ident, Point, Points, Polygons, UserIdent, IDENTIFIERS,
+};
+use crate::desmos::{parsing, Clickable};
+
+mod drawable_list;
 
 fn number_expr(num: f64) -> EvalExpr {
     // This is safe because `EvalKind::Number` doesn't create any `PooledVec`s
@@ -273,58 +273,10 @@ pub struct DrawPoints<'a> {
     pub line_options: Option<&'a LineOptions>,
 }
 
-#[derive(Debug, Clone)]
-pub enum Points {
-    One(Point),
-    Many(PooledVec<Point>),
-}
-
-impl Points {
-    pub fn iter(&self) -> OptIter<Point> {
-        match self {
-            Self::One(x) => OptIter::One(Some(x)),
-            Self::Many(many) => OptIter::Many(many.iter()),
-        }
-    }
-
-    pub fn windows(&self, size: usize) -> OptWindowIter<Point> {
-        assert_ne!(size, 1, "Can't be bothered :shrug:");
-
-        match self {
-            Points::One(_) => OptWindowIter { iter: None },
-            Points::Many(many) => OptWindowIter {
-                iter: Some(many.windows(size)),
-            },
-        }
-    }
-}
-
 /// Statement or expression evaluating to polygon or polygon list
 #[derive(Debug, Clone)]
 pub struct DrawPolygons<'a> {
     pub polygons: Polygons,
     pub line_options: Option<&'a LineOptions>,
     pub fill_options: Option<&'a FillOptions>,
-}
-
-#[derive(Debug, Clone)]
-pub enum Polygons {
-    One(Polygon),
-    Many(PooledVec<Polygon>),
-}
-
-impl Polygons {
-    pub fn iter(&self) -> OptIter<Polygon> {
-        match self {
-            Self::One(x) => OptIter::One(Some(x)),
-            Self::Many(many) => OptIter::Many(many.iter()),
-        }
-    }
-
-    pub fn into_iter(self) -> OptIntoIter<Polygon> {
-        match self {
-            Self::One(x) => OptIntoIter::One(Some(x)),
-            Self::Many(vec) => OptIntoIter::Many { vec, index: 0 },
-        }
-    }
 }

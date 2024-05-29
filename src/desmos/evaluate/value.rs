@@ -4,9 +4,7 @@ pub use list::*;
 pub use listables::*;
 pub use primitive::*;
 
-use crate::desmos::evaluate::{
-    UserIdent,
-};
+use crate::desmos::evaluate::UserIdent;
 use crate::pooled_vec::PooledVec;
 
 use super::tree::EvalExpr;
@@ -117,6 +115,17 @@ impl TryFrom<VarValue> for Computable {
         match value {
             VarValue::Prim(p) => p.try_into().map(Computable::Prim),
             VarValue::List(l) => l.try_into().map(Computable::List),
+        }
+    }
+}
+
+impl TryFrom<VarValue> for Primitive {
+    type Error = PrimList;
+
+    fn try_from(value: VarValue) -> Result<Self, Self::Error> {
+        match value {
+            VarValue::Prim(p) => Ok(p),
+            VarValue::List(l) => Err(l),
         }
     }
 }
