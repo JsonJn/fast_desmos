@@ -64,8 +64,20 @@ impl ValueContext {
         self.values.remove(&ident);
     }
 
-    pub fn set_value(&mut self, ident: UserIdent, value: VarValue) {
+    pub fn un_or_set(&mut self, ident: UserIdent, value: Option<VarValue>) {
+        match value {
+            Some(x) => {
+                let _ = self.set_value(ident, x);
+            }
+            None => self.unset(ident),
+        }
+    }
+
+    #[must_use]
+    pub fn set_value(&mut self, ident: UserIdent, value: VarValue) -> Option<VarValue> {
+        let old = self.values.remove(&ident);
         self.values.insert(ident, value);
+        old
     }
 
     pub fn get_value(&self, ident: UserIdent) -> VarValue {

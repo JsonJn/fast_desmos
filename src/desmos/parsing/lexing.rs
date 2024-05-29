@@ -32,7 +32,7 @@ impl Token {
                 Token::Identifier(name)
             }
 
-            "pi" | "infty" => Token::Identifier(op),
+            "pi" | "infty" | "index" => Token::Identifier(op),
 
             _ => Token::Punct(match s {
                 "sqrt" => Punctuation::Sqrt,

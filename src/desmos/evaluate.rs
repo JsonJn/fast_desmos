@@ -2,6 +2,7 @@ pub use context::{Functions, FunctionsBuilder, ValueContext};
 pub use convert::ToEval;
 pub use convert::{IdentifierStorer, IDENTIFIERS};
 use once_cell::sync::Lazy;
+use std::cell::OnceCell;
 pub use tree::*;
 pub use value::*;
 
@@ -153,12 +154,15 @@ impl Evaluable for EvalTree {
                             .map(|((id, list), index)| (id, VarValue::Prim(list.get_cloned(index))))
                             .unzip();
 
-                        for (&id, val) in ids.iter().zip(values) {
-                            context.set_value(id, val);
-                        }
+                        let old_vals: Vec<_> = ids
+                            .iter()
+                            .zip(values)
+                            .map(|(&id, val)| context.set_value(id, val))
+                            .collect();
+
                         let e = expr.evaluate(functions, context);
-                        for id in ids {
-                            context.unset(id);
+                        for (id, old) in ids.into_iter().zip(old_vals) {
+                            context.un_or_set(id, old);
                         }
                         e
                     }),
@@ -248,24 +252,21 @@ impl Evaluable for EvalTree {
                                 unreachable!("Parameter count does not match function definition")
                             }
 
+                            // println!("Calling {func:?}");
+                            // println!("With parameters: {p_vals:?}");
+
                             let old_vals: Vec<_> = params
                                 .iter()
                                 .zip(p_vals)
-                                .map(|(&id, val)| {
-                                    let old_val = context.try_get_value(id);
-                                    context.set_value(id, val);
-                                    old_val
-                                })
+                                .map(|(&id, val)| context.set_value(id, val))
                                 .collect();
 
                             let v = expr.evaluate(functions, context);
 
+                            // println!("Returned: {v:?}");
+
                             for (&id, old_val) in params.iter().zip(old_vals) {
-                                if let Some(val) = old_val {
-                                    context.set_value(id, val);
-                                } else {
-                                    context.unset(id);
-                                }
+                                context.un_or_set(id, old_val)
                             }
 
                             v
@@ -337,7 +338,7 @@ impl Evaluable for EvalTree {
                 let VarValue::List(list) = list.evaluate(functions, context) else {
                     unreachable!("List filtering can only applied to lists");
                 };
-                let filter: Computable = filter.evaluate(id, functions, context).into();
+                let filter: Computable = filter.evaluate(functions, context).into();
 
                 let length = filter.len().unwrap_or(usize::MAX).min(list.len());
 
@@ -398,8 +399,10 @@ impl Evaluable for EvalTree {
                     let mut result = None;
 
                     let mut current_counter = from;
+                    let old_val = OnceCell::new();
                     while current_counter <= to {
-                        context.set_value(counter, VarValue::number(current_counter));
+                        let old = context.set_value(counter, VarValue::number(current_counter));
+                        let _ = old_val.set(old);
 
                         let vv = expr.evaluate(functions, context);
                         // println!("{vv:?}");
@@ -423,7 +426,7 @@ impl Evaluable for EvalTree {
                         current_counter += 1.0;
                     }
 
-                    context.unset(counter);
+                    context.un_or_set(counter, old_val.into_inner().flatten());
 
                     result.unwrap_or(Computable::number(0.0)).into()
                 })
@@ -447,16 +450,33 @@ impl Evaluable for EvalTree {
                     .into()
             }
             EvalKind::IfElse { cond, yes, no } => {
-                let cond = cond.evaluate(id, functions, context).into();
+                let cond = cond.evaluate(functions, context);
                 let [yes, no] = [yes, no].map(|v| v.evaluate(functions, context));
 
-                pervasive_apply_known(id, [cond, yes, no], |[cond, yes, no]| {
-                    if cond == Primitive::Computable(CompPrim::Number(1.0)) {
-                        yes
-                    } else {
-                        no
+                match cond {
+                    CondOutput::Prim(cond) => {
+                        if cond {
+                            yes
+                        } else {
+                            no
+                        }
                     }
-                })
+                    CondOutput::List(bools) => {
+                        let x = PooledVec::from_iter(
+                            &POOL_PRIMITIVE,
+                            id,
+                            bools.iter().copied().enumerate().map(|(i, b)| {
+                                match b {
+                                    true => &yes,
+                                    false => &no,
+                                }
+                                .get_cloned(i)
+                            }),
+                        );
+
+                        VarValue::List(x.into())
+                    }
+                }
             }
         }
     }

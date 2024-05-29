@@ -1,14 +1,16 @@
 use once_cell::sync::Lazy;
+use std::sync::atomic;
 
 pub use identifiers::IdentifierStorer;
 
-use crate::desmos::evaluate::{tree, EvalKind};
+use crate::desmos::evaluate::{tree, EvalKind, NEXT_ID};
 use crate::desmos::parsing::{
     AbsoluteValue, AddSub, Differentiate, ElementAccess, Equality, Everything, EverythingElse,
     Expression, Fraction, FunctionCall, Grouping, IfElse, IfElseBranches, Inequality,
     ListComprehension, ListContents, ListFiltering, ListIndexing, ListLiteral, ListRange, Multiply,
     MultiplyOrBelow, Number, Point, PostfixOrBelow, Power, Root, SumProd, VariableDef,
 };
+use crate::pooled_vec::Id;
 
 use super::super::parsing;
 use super::tree::{EvalExpr, VarDef};
@@ -104,10 +106,12 @@ impl From<parsing::Conditional> for tree::Conditional {
 fn convert_cond(filter: parsing::Conditional) -> tree::Conditional {
     match filter {
         parsing::Conditional::Equality(Equality { exprs }) => tree::Conditional::Equality {
+            id: Id::new(NEXT_ID.fetch_add(1, atomic::Ordering::Relaxed)),
             exprs: exprs.into_iter().map(ToEval::to_eval).collect(),
         },
         parsing::Conditional::Inequality(Inequality { exprs, kinds }) => {
             tree::Conditional::Inequality {
+                id: Id::new(NEXT_ID.fetch_add(1, atomic::Ordering::Relaxed)),
                 comp: kinds,
                 exprs: exprs.into_iter().map(ToEval::to_eval).collect(),
             }

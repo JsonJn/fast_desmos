@@ -196,7 +196,7 @@ impl Statement<'_> {
                     let value = expr.evaluate(functions, context);
                     let drawable = vv_to_drawable(&value, drawable_options);
                     if let Some(ident) = ident {
-                        context.set_value(ident, value.clone());
+                        let _ = context.set_value(ident, value.clone());
                     }
                     drawable
                 } else {
@@ -208,7 +208,7 @@ impl Statement<'_> {
                 let value = expr.evaluate(functions, context);
                 let drawable = vv_to_drawable(&value, drawable_options);
                 if let Some(id) = ident {
-                    context.set_value(id, value.clone());
+                    let _ = context.set_value(id, value.clone());
                 }
                 drawable
             }
@@ -234,7 +234,7 @@ impl Statement<'_> {
                     let value = expr.evaluate(functions, context);
                     let drawable = vv_to_drawable(&value, drawable_options);
                     if let Some(id) = ident {
-                        context.set_value(id, value.clone());
+                        let _ = context.set_value(id, value.clone());
                     }
                     drawable
                 }
@@ -261,7 +261,7 @@ impl Statement<'_> {
                     let value = expr.evaluate(functions, context);
                     let drawable = vv_to_drawable(&value, drawable_options);
                     if let Some(id) = ident {
-                        context.set_value(id, value.clone());
+                        let _ = context.set_value(id, value.clone());
                     }
                     drawable
                 }
@@ -271,7 +271,7 @@ impl Statement<'_> {
                     let value = expr.evaluate(functions, context);
                     let drawable = vv_to_drawable(&value, drawable_options);
                     if let Some(id) = ident {
-                        context.set_value(id, value.clone());
+                        let _ = context.set_value(id, value.clone());
                     }
                     drawable
                 } else if !options.hidden {
@@ -523,7 +523,7 @@ pub struct AllContext {
 impl AllContext {
     pub fn apply_act_value(&mut self, act_value: ActValue) {
         for (id, value) in act_value.pairs {
-            self.context.set_value(id, value);
+            let _ = self.context.set_value(id, value);
         }
     }
 
@@ -537,9 +537,9 @@ impl AllContext {
         id: UserIdent,
         val: VarValue,
     ) -> VarValue {
-        self.context.set_value(id, val);
+        let old = self.context.set_value(id, val);
         let value = self.evaluate(expr);
-        self.context.unset(id);
+        self.context.un_or_set(id, old);
         value
     }
 
@@ -550,5 +550,22 @@ impl AllContext {
             &self.functions,
             &mut self.context,
         )
+    }
+
+    pub fn evaluate_act_with<T: ActEvaluable>(
+        &mut self,
+        expr: &T,
+        id: UserIdent,
+        val: VarValue,
+    ) -> ActValue {
+        let old = self.context.set_value(id, val);
+        let val = expr.evaluate(
+            &self.act_functions,
+            &mut self.act_context,
+            &self.functions,
+            &mut self.context,
+        );
+        self.context.un_or_set(id, old);
+        val
     }
 }

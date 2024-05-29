@@ -138,10 +138,6 @@ pub enum TriadicPervasive {
     Rgb,
     Hsv,
 }
-#[derive(PartialEq, Debug, Copy, Clone)]
-pub enum VariadicPervasive {
-    Polygon,
-}
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub enum ListStat {
@@ -309,23 +305,6 @@ impl TriadicPervasive {
                 );
 
                 Primitive::color(Color(r, g, b))
-            }
-        }
-    }
-}
-
-impl VariadicPervasive {
-    pub fn apply(self, id: Id, vars: impl IntoIterator<Item = Primitive>) -> Primitive {
-        match self {
-            VariadicPervasive::Polygon => {
-                let vars = vars.into_iter();
-                println!("Polygon with {:?} points", vars.size_hint());
-
-                let vars = PooledVec::from_iter(&POOL_POINT, id, vars.map(|v| {
-                    take_pat!(v => p from Primitive::Computable(CompPrim::Point(p)), "Non point argument to polygon")
-                }));
-
-                Primitive::polygon(Polygon(vars.pooled_to_vec()))
             }
         }
     }
@@ -689,10 +668,12 @@ pub struct VarDef {
 #[derive(PartialEq, Debug)]
 pub enum Conditional {
     Inequality {
+        id: Id,
         comp: Vec<InequalityType>,
         exprs: Vec<EvalExpr>,
     },
     Equality {
+        id: Id,
         exprs: Vec<EvalExpr>,
     },
 }
@@ -708,6 +689,7 @@ impl InequalityType {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum CondOutput {
     Prim(bool),
     List(PooledVec<bool>),
@@ -751,24 +733,22 @@ impl From<Result<bool, PooledVec<bool>>> for CondOutput {
 }
 
 impl Conditional {
-    pub fn evaluate(
-        &self,
-        id: Id,
-        functions: &Functions,
-        context: &mut ValueContext,
-    ) -> CondOutput {
+    pub fn evaluate(&self, functions: &Functions, context: &mut ValueContext) -> CondOutput {
         match self {
-            Conditional::Inequality { exprs, comp } => {
+            Conditional::Inequality { id, exprs, comp } => {
                 if exprs.is_empty() {
                     unreachable!("Inequality cannot have zero expressions");
                 }
 
-                let values = exprs
+                let values: Vec<_> = exprs
                     .iter()
                     .map(|v| -> Computable { v.evaluate(functions, context).try_into().unwrap() })
-                    .collect::<Vec<_>>();
+                    .collect();
 
-                pervasive_apply_comp_variadic_bool(id, values, |vals| {
+                // println!("Values: {values:?}");
+                // println!("Comparisons: {comp:?}");
+
+                let result = pervasive_apply_comp_variadic_bool(*id, values, |vals| {
                     let mut last = vals.next().unwrap();
                     for (next, &c) in vals.zip(comp) {
                         let cmp = last.cmp(next).unwrap();
@@ -780,9 +760,13 @@ impl Conditional {
                     }
                     true
                 })
-                .into()
+                .into();
+
+                // println!("Result: {result:?}");
+
+                result
             }
-            Conditional::Equality { exprs } => {
+            Conditional::Equality { id, exprs } => {
                 if exprs.is_empty() {
                     unreachable!("Equality cannot have zero expressions");
                 }
@@ -792,7 +776,7 @@ impl Conditional {
                     .map(|v| -> Computable { v.evaluate(functions, context).try_into().unwrap() })
                     .collect::<Vec<_>>();
 
-                pervasive_apply_comp_variadic_bool(id, values, |vals| {
+                pervasive_apply_comp_variadic_bool(*id, values, |vals| {
                     let mut last = vals.next().unwrap();
                     for next in vals {
                         let correct = last == next;
@@ -809,7 +793,7 @@ impl Conditional {
     }
 }
 
-static NEXT_ID: AtomicU32 = AtomicU32::new(10000);
+pub static NEXT_ID: AtomicU32 = AtomicU32::new(10000);
 
 #[derive(PartialEq, Debug)]
 pub struct EvalTree {

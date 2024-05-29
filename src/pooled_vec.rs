@@ -4,7 +4,7 @@ use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::sync::RwLock;
 use std::{cmp, mem};
 
-use rustc_hash::{FxHashMap};
+use rustc_hash::FxHashMap;
 
 type CloneNumber = u16;
 
@@ -73,6 +73,10 @@ impl<T> VecPool<T> {
     }
 
     fn get_or_else(&self, id: InternalId, default: impl FnOnce() -> Vec<T>) -> Vec<T> {
+        // if id.id.id == 10068 {
+        //     panic!();
+        // }
+
         let mut vecs = self.vecs.write().unwrap();
         let vec = vecs.remove(&id).map_or_else(default, |v| {
             if let Some(x) = v {
@@ -86,6 +90,10 @@ impl<T> VecPool<T> {
     }
 
     fn get_with_capacity(&self, id: InternalId, capacity: usize) -> Vec<T> {
+        // if id.id.id == 10068 {
+        //     panic!();
+        // }
+
         let mut vecs = self.vecs.write().unwrap();
         let v = vecs.remove(&id).map_or_else(
             || Vec::with_capacity(capacity),
@@ -179,7 +187,7 @@ impl<T: Clone> Clone for PooledVec<T> {
 
 impl<T> PooledVec<T> {
     pub fn new(pool: &'static VecPool<T>, id: Id) -> Self {
-        Self::new_internal(pool, id.into())
+        Self::new_internal(pool, pool.get_next_derived(id))
     }
 
     fn new_internal(pool: &'static VecPool<T>, internal_id: InternalId) -> Self {
@@ -200,7 +208,7 @@ impl<T> PooledVec<T> {
     }
 
     pub fn with_capacity(pool: &'static VecPool<T>, id: Id, capacity: usize) -> Self {
-        Self::with_capacity_internal(pool, id.into(), capacity)
+        Self::with_capacity_internal(pool, pool.get_next_derived(id), capacity)
     }
 
     fn with_capacity_internal(

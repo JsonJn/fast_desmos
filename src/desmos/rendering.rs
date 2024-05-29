@@ -1,3 +1,4 @@
+use raylib::consts::{MouseButton, MouseCursor};
 use std::time::Instant;
 
 use raylib::ffi;
@@ -13,7 +14,7 @@ use crate::desmos::rendering::drawables::{
     DrawColor, DrawPoints, DrawPolygons, Drawable, DrawableType, ExplicitEq, ExplicitType,
     FillOptions, LineOptions, ParametricDomain, ParametricEq, PointOptions,
 };
-use crate::desmos::{Desmos, Viewport};
+use crate::desmos::{Clickable, Desmos, Viewport};
 
 pub mod drawables;
 
@@ -92,25 +93,31 @@ pub fn window(params: Desmos) {
         ..Default::default()
     };
 
-    let mut frame_counter: u128 = 0;
-    let last_frame_start = Instant::now();
+    // let mut frame_counter: u128 = 0;
+    // let last_frame_start = Instant::now();
     while !rl.window_should_close() {
-        frame_counter += 1;
-        if frame_counter % 30 == 0 {
-            let took = last_frame_start.elapsed().as_secs_f32();
-            let fps = (frame_counter as f32) / took;
-            println!("fps: {}", fps.round());
-        }
+        // frame_counter += 1;
+        // if frame_counter % 30 == 0 {
+        //     let took = last_frame_start.elapsed().as_secs_f32();
+        //     let fps = (frame_counter as f32) / took;
+        //     println!("fps: {}", fps.round());
+        // }
 
         // let execute_start = Instant::now();
         let drawables = statements.cycle(&mut context);
-        if frame_counter % 1000 == 0 {
-            println!("{} drawables on frame {frame_counter}", drawables.len());
-        }
+        let act_val = ticker.as_ref().map(|func| context.evaluate_act(&func.expr));
+        // if frame_counter % 1000 == 0 {
+        //     println!("{} drawables on frame {frame_counter}", drawables.len());
+        // }
         // let execute_elapsed = execute_start.elapsed();
         // println!("Execute took {execute_elapsed:?}");
 
-        let act_val = ticker.as_ref().map(|func| context.evaluate_act(&func.expr));
+        let mouse_pos_world = rl.get_screen_to_world2D(rl.get_mouse_position(), camera);
+        let mouse_pressed = rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT);
+
+        let mut run_clickable: Option<&Clickable> = None;
+        let mut click_index: Option<usize> = None;
+        let mut possibly_click: bool = false;
 
         let dt = rl.get_frame_time();
         for (key, vec) in KEY_OFFSETS {
@@ -240,7 +247,7 @@ pub fn window(params: Desmos) {
                                             let (first, constraint) =
                                                 (first.expr.as_ref(), constraint.expr.as_ref());
                                             if let EvalKind::IfElse {
-                                                cond: Conditional::Inequality { exprs, comp },
+                                                cond: Conditional::Inequality { id: _, exprs, comp },
                                                 yes,
                                                 no,
                                             } = &constraint.kind
@@ -373,12 +380,16 @@ pub fn window(params: Desmos) {
                                     .try_into()
                                     .expect("Opacity must be a number");
 
-                                for (&p, ((&diameter, &opacity), &color)) in points.iter().zip(
-                                    diameter
-                                        .iter_rep()
-                                        .zip(opacity.iter_rep())
-                                        .zip(color.iter_rep()),
-                                ) {
+                                for (index, (&p, ((&diameter, &opacity), &color))) in points
+                                    .iter()
+                                    .zip(
+                                        diameter
+                                            .iter_rep()
+                                            .zip(opacity.iter_rep())
+                                            .zip(color.iter_rep()),
+                                    )
+                                    .enumerate()
+                                {
                                     const A: f32 = 0.923_879_5;
                                     const B: f32 = std::f32::consts::FRAC_1_SQRT_2;
                                     const C: f32 = 0.382_683_43;
@@ -413,13 +424,23 @@ pub fn window(params: Desmos) {
 
                                     let radius = diameter as f32 / 2.0 / camera.zoom;
 
-                                    let ffi::Vector2 { x: px, y: py } = p.into();
+                                    let center: Vector2 = p.into();
+                                    let Vector2 { x: px, y: py } = center;
 
                                     let points: &[(f32, f32)] = if diameter < 5.0 {
                                         &POINTS_8
                                     } else {
                                         &POINTS_16
                                     };
+
+                                    if center.distance_to(mouse_pos_world) <= radius {
+                                        if mouse_pressed {
+                                            run_clickable = clickable;
+                                            click_index = Some(index + 1);
+                                        } else {
+                                            possibly_click = true;
+                                        }
+                                    }
 
                                     d2.draw_triangle_fan(
                                         &points
@@ -475,6 +496,8 @@ pub fn window(params: Desmos) {
                                 fill_options,
                                 line_options,
                             } = polys;
+
+                            //TODO: Clickable polygons
 
                             if let Some(FillOptions { opacity }) = fill_options {
                                 let opacity: Numbers = context
@@ -546,7 +569,29 @@ pub fn window(params: Desmos) {
                 // println!("Drawing took {drawing_elapsed:?}");
             }
 
-            // d.draw_fps(0, 0);
+            d.draw_fps(0, 0);
+        }
+
+        if possibly_click {
+            rl.set_mouse_cursor(MouseCursor::MOUSE_CURSOR_POINTING_HAND);
+        } else {
+            rl.set_mouse_cursor(MouseCursor::MOUSE_CURSOR_DEFAULT);
+        }
+
+        if let Some(Clickable { expr }) = run_clickable {
+            let act_val = match click_index {
+                Some(index) => context.evaluate_act_with(
+                    expr,
+                    IdentifierStorer::IDENT_INDEX,
+                    VarValue::number(index as f64),
+                ),
+                None => context.evaluate_act(expr),
+            };
+
+            // println!("{act_val:?}");
+
+            statements.remove_calculations(act_val.pairs.iter().map(|v| v.0));
+            context.apply_act_value(act_val);
         }
 
         if let Some(act_val) = act_val {

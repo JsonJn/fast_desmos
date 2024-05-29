@@ -31,8 +31,12 @@ impl CanDepend for VarDef {
 impl CanDepend for Conditional {
     fn get_deps(&self) -> Vec<usize> {
         match self {
-            Conditional::Inequality { exprs, comp: _ } => exprs,
-            Conditional::Equality { exprs } => exprs,
+            Conditional::Inequality {
+                id: _,
+                exprs,
+                comp: _,
+            } => exprs,
+            Conditional::Equality { id: _, exprs } => exprs,
         }
         .get_deps()
     }

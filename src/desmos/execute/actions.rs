@@ -8,7 +8,6 @@ mod convert;
 mod tree;
 mod value;
 
-use crate::pooled_vec::Id;
 pub use context::{ActContext, ActFuncBuilder, ActFunction, ActFunctions};
 #[allow(unused_imports)]
 pub use convert::{ToActExpr, ACT_IDENTS};
@@ -51,7 +50,7 @@ impl ActEvaluable for ActTree {
                 .sum(),
             ActTree::IfElse { cond, yes, no } => {
                 // SAFETY: The id cannot cause a overlapping vector because it would panic anyway
-                let CondOutput::Prim(b) = cond.evaluate(Id::zeroed(), functions, context) else {
+                let CondOutput::Prim(b) = cond.evaluate(functions, context) else {
                     unreachable!("Actions cannot be placed in a list")
                 };
 
@@ -76,15 +75,19 @@ impl ActEvaluable for ActTree {
                     "Function call parameters do not match function parameters"
                 );
 
-                for (&id, param) in idents.iter().zip(params) {
-                    let value = param.evaluate(functions, context);
-                    context.set_value(id, value);
-                }
+                let old_vals: Vec<_> = idents
+                    .iter()
+                    .zip(params)
+                    .map(|(&id, param)| {
+                        let value = param.evaluate(functions, context);
+                        context.set_value(id, value)
+                    })
+                    .collect();
 
                 let v = expr.evaluate(act_functions, act_context, functions, context);
 
-                for &id in idents {
-                    context.unset(id);
+                for (&id, val) in idents.into_iter().zip(old_vals) {
+                    context.un_or_set(id, val);
                 }
 
                 v

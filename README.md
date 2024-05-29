@@ -38,6 +38,8 @@ Empty tick box denotes planned support.
 - [ ] Actions
     - [x] Tickers without the ability to turn them off
     - [ ] Clickable
+        - [x] Points
+        - [ ] Polygons
 - [ ] Custom control options
     - [ ] keyboard controlled variables / actions
     - [ ] panning points
