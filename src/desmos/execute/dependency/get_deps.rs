@@ -91,6 +91,7 @@ impl CanDepend for EvalTree {
                 func.get_deps(),
             ),
             EvalKind::Power { base, power } => vec_concat(base.get_deps(), power.get_deps()),
+            EvalKind::IntPower { base, power: _ } => base.get_deps(),
             EvalKind::ListIndexing { list, index } => vec_concat(list.get_deps(), index.get_deps()),
             EvalKind::ListFiltering { list, filter } => {
                 vec_concat(list.get_deps(), filter.get_deps())

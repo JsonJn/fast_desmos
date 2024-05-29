@@ -57,9 +57,20 @@ impl ToEval for PostfixOrBelow {
         match self {
             PostfixOrBelow::Below(x) => x.to_eval(),
             PostfixOrBelow::Power(Power { power, base }) => {
+                let power = power.to_eval();
+
+                if let EvalKind::Number(x) = power.expr.as_ref().kind {
+                    if x.fract() == 0.0 {
+                        return EvalExpr::new_generated(EvalKind::IntPower {
+                            base: base.to_eval(),
+                            power: x as i32,
+                        });
+                    }
+                }
+
                 EvalExpr::new_generated(EvalKind::Power {
                     base: base.to_eval(),
-                    power: power.to_eval(),
+                    power,
                 })
             }
             PostfixOrBelow::Indexing(ListIndexing { list, index }) => {

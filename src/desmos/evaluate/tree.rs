@@ -1,5 +1,4 @@
 use crate::pooled_vec::Id;
-use std::cell::{OnceCell, RefCell};
 use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter};
 use std::iter;
@@ -874,6 +873,10 @@ pub enum EvalKind {
     Power {
         base: EvalExpr,
         power: EvalExpr,
+    },
+    IntPower {
+        base: EvalExpr,
+        power: i32,
     },
     ListIndexing {
         list: EvalExpr,

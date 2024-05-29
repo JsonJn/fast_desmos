@@ -296,6 +296,19 @@ impl Evaluable for EvalTree {
                     _ => unreachable!("Power must be two numbers"),
                 })
             }
+            EvalKind::IntPower { base, power } => {
+                let base: Result<Computable, _> = base.evaluate(functions, context).try_into();
+                let Ok(base) = base else {
+                    unreachable!("Power must use computable");
+                };
+                pervasive_apply_comp_known(id, [base], |[k]| {
+                    let CompPrim::Number(x) = k else {
+                        unreachable!("Power base must be a number");
+                    };
+
+                    Primitive::number(x.powi(*power))
+                })
+            }
             EvalKind::ListIndexing { list, index } => {
                 let index: Computable = index
                     .evaluate(functions, context)
