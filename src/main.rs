@@ -43,12 +43,13 @@ fn main() {
         IDEAL_GAS = "https://www.desmos.com/calculator/ht6vnqkrxx";
         ANALYTIC_IDEAL_GAS = "https://www.desmos.com/calculator/kjrqurcozt";
         SPINNY_CUBE = "https://www.desmos.com/calculator/epretb6vnj";
-        SNUB_CUBE = "https://www.desmos.com/calculator/jroixxyk1e";
+        SNUB_SQUARE = "https://www.desmos.com/calculator/jroixxyk1e";
         VECTOR_FIELD = "https://www.desmos.com/calculator/g25eqqco4m";
         TIC_TAC_TOE = "https://www.desmos.com/calculator/le77826l07";
+        POINT_SIZES = "https://www.desmos.com/calculator/xaee0lvsnc";
     }
 
-    let desmos = Desmos::from_url(TIC_TAC_TOE).unwrap();
+    let desmos = Desmos::from_url(SNUB_SQUARE).unwrap();
     desmos::rendering::window(desmos);
 
     // println!("{:?}", size_of::<EvalTree>());

@@ -10,12 +10,14 @@ use crate::desmos::evaluate::{
 };
 use crate::desmos::execute::convert_cells;
 use crate::desmos::parsing::InequalityType;
+use crate::desmos::rendering::circles::{CIRCLE_16, CIRCLE_32, CIRCLE_8};
 use crate::desmos::rendering::drawables::{
     DrawColor, DrawPoints, DrawPolygons, Drawable, DrawableType, ExplicitEq, ExplicitType,
     FillOptions, LineOptions, ParametricDomain, ParametricEq, PointOptions,
 };
 use crate::desmos::{Clickable, Desmos, Viewport};
 
+mod circles;
 pub mod drawables;
 
 impl From<Point> for ffi::Vector2 {
@@ -390,47 +392,17 @@ pub fn window(params: Desmos) {
                                     )
                                     .enumerate()
                                 {
-                                    const A: f32 = 0.923_879_5;
-                                    const B: f32 = std::f32::consts::FRAC_1_SQRT_2;
-                                    const C: f32 = 0.382_683_43;
-                                    const POINTS_16: [(f32, f32); 16] = [
-                                        (1.0, 0.0),
-                                        (A, -C),
-                                        (B, -B),
-                                        (C, -A),
-                                        (0.0, -1.0),
-                                        (-C, -A),
-                                        (-B, -B),
-                                        (-A, -C),
-                                        (-1.0, 0.0),
-                                        (-A, C),
-                                        (-B, B),
-                                        (-C, A),
-                                        (0.0, 1.0),
-                                        (C, A),
-                                        (B, B),
-                                        (A, C),
-                                    ];
-                                    const POINTS_8: [(f32, f32); 8] = [
-                                        (1.0, 0.0),
-                                        (B, -B),
-                                        (0.0, -1.0),
-                                        (-B, -B),
-                                        (-1.0, 0.0),
-                                        (-B, B),
-                                        (0.0, 1.0),
-                                        (B, B),
-                                    ];
-
                                     let radius = diameter as f32 / 2.0 / camera.zoom;
 
                                     let center: Vector2 = p.into();
                                     let Vector2 { x: px, y: py } = center;
 
-                                    let points: &[(f32, f32)] = if diameter < 5.0 {
-                                        &POINTS_8
+                                    let points: &[(f32, f32)] = if diameter < 20.0 {
+                                        &CIRCLE_8
+                                    } else if diameter < 100.0 {
+                                        &CIRCLE_16
                                     } else {
-                                        &POINTS_16
+                                        &CIRCLE_32
                                     };
 
                                     if center.distance_to(mouse_pos_world) <= radius {
