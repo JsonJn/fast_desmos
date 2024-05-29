@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
-use std::collections::hash_map::DefaultHasher;
+use once_cell::sync::Lazy;
+use rustc_hash::FxHasher;
 use std::fmt::Debug;
 use std::fs;
 use std::fs::File;
@@ -11,6 +12,10 @@ use std::time::{Duration, Instant};
 
 use crate::desmos::evaluate::{Evaluable, Functions, Point, ToEval, ValueContext, VarValue};
 use crate::desmos::parsing::{Lexer, Parser};
+use crate::pooled_vec::{Id, PooledVec, VecPool};
+
+const TEST_ID: Id = Id::new(128);
+static NUM_POOL: Lazy<VecPool<f64>> = Lazy::new(VecPool::new);
 
 fn parse_value(b: &str) -> VarValue {
     let mut bytes = b.bytes();
@@ -38,14 +43,17 @@ fn parse_value(b: &str) -> VarValue {
             let [only_left] = bytes.try_into().unwrap();
             match only_left {
                 b'N' => {
-                    let xs = remaining
-                        .strip_prefix('[')
-                        .unwrap()
-                        .strip_suffix(']')
-                        .unwrap()
-                        .split(',')
-                        .map(|v| v.parse().unwrap())
-                        .collect::<Vec<_>>();
+                    let xs = PooledVec::from_iter(
+                        &NUM_POOL,
+                        TEST_ID,
+                        remaining
+                            .strip_prefix('[')
+                            .unwrap()
+                            .strip_suffix(']')
+                            .unwrap()
+                            .split(',')
+                            .map(|v| v.parse().unwrap()),
+                    );
                     VarValue::num_list(xs)
                 }
                 _ => panic!("Invalid list character: {}", char::from(only_left)),
@@ -56,7 +64,7 @@ fn parse_value(b: &str) -> VarValue {
 }
 
 fn hash_of<T: Hash>(obj: &T) -> u64 {
-    let mut hasher = DefaultHasher::new();
+    let mut hasher = FxHasher::default();
     obj.hash(&mut hasher);
     hasher.finish()
 }

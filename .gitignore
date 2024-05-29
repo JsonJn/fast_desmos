@@ -1,7 +1,6 @@
 /target
 .idea
-/web_cache/
-titles.json
+web_cache.json
 results.txt
 rewritten.txt
 out.txt

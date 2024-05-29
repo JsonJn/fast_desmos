@@ -1,9 +1,9 @@
 use regex::Regex;
-use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
 use reqwest::Url;
+use serde::{Deserialize, Serialize};
 
 use crate::desmos::evaluate::{Color, EvalExpr, ToEval};
 use crate::desmos::execute::actions::{ActExpr, ToActExpr};
@@ -17,7 +17,6 @@ pub mod rendering;
 use crate::desmos::rendering::drawables::{
     DrawColor, FillOptions, Label, LineOptions, ParametricDomain, PointOptions,
 };
-
 
 #[derive(Debug, Copy, Clone, Default)]
 pub enum OnOffState {
@@ -69,6 +68,48 @@ impl From<bool> for OnOffState {
 impl From<Option<bool>> for OnOffState {
     fn from(value: Option<bool>) -> Self {
         value.map_or_else(Self::default, Self::from)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct WebCache {
+    pub id: String,
+    pub data: CacheData,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CacheData {
+    pub page: String,
+    pub title: String,
+}
+
+impl WebCache {
+    const PATH: &'static str = "web_cache.json";
+
+    pub fn cached() -> Option<Self> {
+        let path = Path::new(Self::PATH);
+        path.exists()
+            .then_some(())
+            .and_then(|_| serde_json::from_str(&fs::read_to_string(path).ok()?).ok())
+    }
+
+    pub fn cached_or_else(id: &str, or: impl FnOnce() -> CacheData) -> Self {
+        let x = Self::cached();
+        if x.as_ref().is_some_and(|cache| cache.id == id) {
+            x.unwrap()
+        } else {
+            Self {
+                id: id.to_string(),
+                data: or(),
+            }
+        }
+    }
+}
+
+impl Drop for WebCache {
+    fn drop(&mut self) {
+        let string = serde_json::to_string(&self).unwrap();
+        fs::write(Self::PATH, string.into_bytes()).unwrap();
     }
 }
 
@@ -158,12 +199,6 @@ fn parse_act_expr(s: &serde_json::Value) -> ActExpr {
 
 impl Desmos {
     pub fn from_url(url: &str) -> Option<Self> {
-        const TITLE_CACHE: &str = "titles.json";
-        const WEB_CACHE: &str = "web_cache";
-        if !Path::new(WEB_CACHE).exists() {
-            fs::create_dir(WEB_CACHE).unwrap();
-        }
-
         let url = Url::parse(url).unwrap();
         let ident = url
             .path_segments()
@@ -172,25 +207,10 @@ impl Desmos {
             .unwrap()
             .to_string();
 
-        let cache_path_str = format!("{WEB_CACHE}/{ident}.json");
-        let cache_path = Path::new(&cache_path_str);
-        let page = if cache_path.exists() {
-            fs::read_to_string(cache_path).unwrap()
-        } else {
-            let url = format!("https://www.desmos.com/calc-states/production/{ident}");
-            let result = reqwest::blocking::get(url).unwrap().text().unwrap();
-            fs::write(cache_path, result.clone()).unwrap();
-            result
-        };
+        let cached = &WebCache::cached_or_else(&ident, || {
+            let json_url = format!("https://www.desmos.com/calc-states/production/{ident}");
+            let page = reqwest::blocking::get(json_url).unwrap().text().unwrap();
 
-        let mut titles: HashMap<String, String> = Path::new(&TITLE_CACHE)
-            .exists()
-            .then(|| serde_json::from_str(&fs::read_to_string(TITLE_CACHE).unwrap()).unwrap())
-            .unwrap_or_default();
-
-        let title = if titles.contains_key(&ident) {
-            titles[&ident].clone()
-        } else {
             let pattern =
                 Regex::new("<meta property=\"og:title\" content=\"([^\"]*)\" />").unwrap();
 
@@ -199,17 +219,16 @@ impl Desmos {
             let mat = pattern.captures(&html).expect("Title not found.");
             let title = mat.get(1).unwrap().as_str().to_string();
 
-            titles.insert(ident.to_string(), title.clone());
-            let to_write = serde_json::to_string(&titles).unwrap();
-            fs::write(TITLE_CACHE, to_write).unwrap();
+            CacheData { page, title }
+        })
+        .data;
 
-            title
-        };
+        let title = cached.title.clone();
 
-        let value: serde_json::Value = serde_json::from_str(&page).unwrap();
-        let value = value.as_object()?;
+        let json: serde_json::Value = serde_json::from_str(&cached.page).unwrap();
+        let json = json.as_object()?;
 
-        let viewport = value
+        let viewport = json
             .get("graph")?
             .as_object()?
             .get("viewport")?
@@ -229,7 +248,7 @@ impl Desmos {
             y_range: (y_min, y_max),
         };
 
-        let expressions = value.get("expressions")?.as_object()?;
+        let expressions = json.get("expressions")?.as_object()?;
         let expr_list = expressions.get("list")?.as_array()?;
 
         let ticker = expressions.get("ticker").and_then(|x| x.as_object());
