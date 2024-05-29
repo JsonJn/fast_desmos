@@ -210,19 +210,19 @@ pub enum EverythingElse {
 
 #[derive(Debug, Clone)]
 pub struct Power {
-    pub base: EverythingElse,
+    pub base: Box<PostfixOrBelow>,
     pub power: Expression,
 }
 
 #[derive(Debug, Clone)]
 pub struct ListIndexing {
-    pub list: EverythingElse,
+    pub list: Box<PostfixOrBelow>,
     pub index: Expression,
 }
 
 #[derive(Debug, Clone)]
 pub struct ListFiltering {
-    pub list: EverythingElse,
+    pub list: Box<PostfixOrBelow>,
     pub filter: Conditional,
 }
 
@@ -233,7 +233,7 @@ pub enum Element {
 }
 #[derive(Debug, Clone)]
 pub struct ElementAccess {
-    pub expr: EverythingElse,
+    pub expr: Box<PostfixOrBelow>,
     pub element: Element,
 }
 

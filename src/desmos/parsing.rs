@@ -591,7 +591,10 @@ impl Parser {
                         Some(power) => Some(EverythingElse::Grouping(Grouping {
                             expr: Expression {
                                 expr: Box::new(Everything::Below(MultiplyOrBelow::Below(
-                                    PostfixOrBelow::Power(Power { base: expr, power }),
+                                    PostfixOrBelow::Power(Power {
+                                        base: Box::new(PostfixOrBelow::Below(expr)),
+                                        power,
+                                    }),
                                 ))),
                             },
                         })),
@@ -617,86 +620,94 @@ impl Parser {
         }
 
         log!("status: {:?}", self.data);
-        let first = self.parse_everything_else()?;
-        let data = self.data.guard_denied();
-        match data.advance() {
-            Some(Token::Punct(Punctuation::Exp)) => {
-                log!("Exp!");
-                let power = self.parse_latex_grouping()?;
-                log!("Latex success!");
-                data.accepted();
-                Some(PostfixOrBelow::Power(Power { base: first, power }))
-            }
-            Some(Token::Punct(Punctuation::LeftSquare)) => {
-                if let Some(index) = (|| {
-                    let guard = self.data.guard_denied();
-                    let index = self.parse_expression()?;
-                    guard.eq_else_none(&Token::Punct(Punctuation::RightSquare))?;
-                    guard.accepted();
-                    Some(index)
-                })() {
+        let mut current = PostfixOrBelow::Below(self.parse_everything_else()?);
+
+        loop {
+            let data = self.data.guard_denied();
+            match data.advance() {
+                Some(Token::Punct(Punctuation::Exp)) => {
+                    log!("Exp!");
+                    let power = self.parse_latex_grouping()?;
+                    log!("Latex success!");
                     data.accepted();
-                    Some(PostfixOrBelow::Indexing(ListIndexing {
-                        list: first,
-                        index,
-                    }))
-                } else if let Some(list) = (|| {
-                    let guard = self.data.guard_denied();
-                    let index = self.parse_list_contents()?;
-                    guard.eq_else_none(&Token::Punct(Punctuation::RightSquare))?;
-                    guard.accepted();
-                    Some(index)
-                })() {
-                    data.accepted();
-                    Some(PostfixOrBelow::Indexing(ListIndexing {
-                        list: first,
-                        index: Expression {
-                            expr: Box::new(Everything::Below(MultiplyOrBelow::Below(
-                                PostfixOrBelow::Below(EverythingElse::List(list)),
-                            ))),
-                        },
-                    }))
-                } else if let Some(filter) = (|| {
-                    let guard = self.data.guard_denied();
-                    let index = self.parse_conditional()?;
-                    guard.eq_else_none(&Token::Punct(Punctuation::RightSquare))?;
-                    guard.accepted();
-                    Some(index)
-                })() {
-                    data.accepted();
-                    Some(PostfixOrBelow::Filtering(ListFiltering {
-                        list: first,
-                        filter,
-                    }))
-                } else {
-                    None
+                    current = PostfixOrBelow::Power(Power {
+                        base: Box::new(current),
+                        power,
+                    });
                 }
+                Some(Token::Punct(Punctuation::LeftSquare)) => {
+                    if let Some(index) = (|| {
+                        let guard = self.data.guard_denied();
+                        let index = self.parse_expression()?;
+                        guard.eq_else_none(&Token::Punct(Punctuation::RightSquare))?;
+                        guard.accepted();
+                        Some(index)
+                    })() {
+                        data.accepted();
+                        current = PostfixOrBelow::Indexing(ListIndexing {
+                            list: Box::new(current),
+                            index,
+                        });
+                    } else if let Some(list) = (|| {
+                        let guard = self.data.guard_denied();
+                        let index = self.parse_list_contents()?;
+                        guard.eq_else_none(&Token::Punct(Punctuation::RightSquare))?;
+                        guard.accepted();
+                        Some(index)
+                    })() {
+                        data.accepted();
+                        current = PostfixOrBelow::Indexing(ListIndexing {
+                            list: Box::new(current),
+                            index: Expression {
+                                expr: Box::new(Everything::Below(MultiplyOrBelow::Below(
+                                    PostfixOrBelow::Below(EverythingElse::List(list)),
+                                ))),
+                            },
+                        });
+                    } else if let Some(filter) = (|| {
+                        let guard = self.data.guard_denied();
+                        let index = self.parse_conditional()?;
+                        guard.eq_else_none(&Token::Punct(Punctuation::RightSquare))?;
+                        guard.accepted();
+                        Some(index)
+                    })() {
+                        data.accepted();
+                        current = PostfixOrBelow::Filtering(ListFiltering {
+                            list: Box::new(current),
+                            filter,
+                        });
+                    } else {
+                        return None;
+                    }
+                }
+                Some(Token::Punct(Punctuation::Dot)) => {
+                    let Ident(ident) = self.parse_ident()?;
+
+                    let element = match ident.as_str() {
+                        "x" => Element::X,
+                        "y" => Element::Y,
+                        _ => return None,
+                    };
+
+                    data.accepted();
+
+                    current = PostfixOrBelow::Element(ElementAccess {
+                        expr: Box::new(current),
+                        element,
+                    });
+                }
+                _ => break Some(current),
             }
-            Some(Token::Punct(Punctuation::Dot)) => {
-                let Ident(ident) = self.parse_ident()?;
-
-                let element = match ident.as_str() {
-                    "x" => Element::X,
-                    "y" => Element::Y,
-                    _ => return None,
-                };
-
-                data.accepted();
-
-                Some(PostfixOrBelow::Element(ElementAccess {
-                    expr: first,
-                    element,
-                }))
-            }
-            _ => Some(PostfixOrBelow::Below(first)),
         }
     }
 
     fn parse_multiply(&mut self) -> Option<MultiplyOrBelow> {
         log!("parsing multiply");
         log!("status: {:?}", self.data);
-        let data = self.data.guard_denied();
+
         let first = self.parse_postfix()?;
+
+        let data = self.data.guard_denied();
 
         let mut exprs = vec![first];
 
@@ -815,10 +826,8 @@ impl Parser {
         log!("parsing action");
 
         let data = self.data.guard_denied();
-        match data.peek().cloned()? {
+        match data.advance().cloned()? {
             Token::Identifier(ident) => {
-                data.advance();
-
                 if data.advance_if_eq(&Token::Punct(Punctuation::SimArrow)) {
                     let expr = self.parse_expression()?;
 
@@ -854,8 +863,8 @@ impl Parser {
                 if data.advance_if_eq(&Token::Punct(Punctuation::Comma)) {
                     let no = self.parse_act_expr()?;
                     data.eq_else_none(&Token::Punct(Punctuation::RightCurly))?;
-                    data.accepted();
 
+                    data.accepted();
                     Some(Action::IfElse(ActIfElse {
                         cond,
                         yes,

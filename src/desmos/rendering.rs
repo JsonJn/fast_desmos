@@ -1,8 +1,8 @@
 use raylib::consts::{MouseButton, MouseCursor};
 use std::time::Instant;
 
-use raylib::ffi;
 use raylib::prelude::{Camera2D, KeyboardKey, RaylibDraw, RaylibMode2DExt, Vector2};
+use raylib::{check_collision_point_poly, ffi};
 
 use crate::desmos::evaluate::{
     Color, Colors, Conditional, EvalKind, IdentifierStorer, Numbers, Point, Points, Polygon,
@@ -477,21 +477,43 @@ pub fn window(params: Desmos) {
                                     .try_into()
                                     .expect("Opacity must be a number");
 
-                                for ((points, &opacity), &color) in polygons
+                                for (i, ((Polygon(points), &opacity), &color)) in polygons
                                     .iter()
                                     .zip(opacity.iter_rep())
                                     .zip(color.iter_rep())
+                                    .enumerate()
                                 {
-                                    let fill_color = color.with_opacity(opacity);
-                                    let Polygon(points) = points;
-                                    let mut vecs = points
-                                        .iter()
-                                        .map(|&v| -> Vector2 { v.into() })
-                                        .collect::<Vec<_>>();
+                                    if points.len() > 2 {
+                                        let fill_color = color.with_opacity(opacity);
 
-                                    d2.draw_triangle_fan(&vecs, fill_color);
-                                    vecs.reverse();
-                                    d2.draw_triangle_fan(&vecs, fill_color);
+                                        let mut vecs = points
+                                            .into_iter()
+                                            .map(|&v| -> Vector2 { v.into() })
+                                            .collect::<Vec<_>>();
+
+                                        let origin = vecs[0];
+                                        let last1 = vecs[vecs.len() - 1];
+                                        let last2 = vecs[vecs.len() - 2];
+                                        let offset1 = last1 - origin;
+                                        let offset2 = last2 - origin;
+                                        let cross_prod =
+                                            offset1.x * offset2.y - offset1.y * offset2.x;
+
+                                        if cross_prod.is_sign_negative() {
+                                            vecs.reverse();
+                                        }
+
+                                        if check_collision_point_poly(mouse_pos_world, &vecs) {
+                                            possibly_click = true;
+                                            if let Some(clickable) = clickable {
+                                                run_clickable = Some(clickable);
+                                                click_index = Some(i + 1);
+                                            }
+                                        }
+                                        d2.draw_triangle_fan(&vecs, fill_color);
+
+                                        // d2.draw_triangle_fan(&vecs, fill_color);
+                                    }
                                 }
                             }
 

@@ -25,10 +25,12 @@ macro_rules! strings {
 }
 
 fn main() {
-    // let raw = r#"A_{cc}=0.01\sum_{n=1}^{N}\left\{n=I:\left(0,0\right),\frac{p\left[n\right]-p\left[I\right]}{\max\left(0.01,\left|p\left[n\right]-p\left[I\right]\right|^{3}\right)}\right\}"#.to_string();
+    // use desmos::parsing::{Lexer, Parser};
+    // let raw = r#"\operatorname{polygon}\left(\left(0.5+S_{top},-0.5+P_{s}\left[I_{addLoc}\right].y\right),\left(S_{top}-0.5,-0.5+P_{s}\left[I_{addLoc}\right].y\right),\left(S_{top}-0.5,H+0.5\right),\left(S_{top}+0.5,H+0.5\right)\right)"#.to_string();
     // let (lexed, left) = Lexer::lex(raw).unwrap();
     // let parsed = Parser::parse(lexed).unwrap();
     // println!("{parsed:#?}");
+    // return;
 
     // let url = args();
     // let parts: Vec<String> = url.collect();
@@ -47,9 +49,10 @@ fn main() {
         VECTOR_FIELD = "https://www.desmos.com/calculator/g25eqqco4m";
         TIC_TAC_TOE = "https://www.desmos.com/calculator/le77826l07";
         POINT_SIZES = "https://www.desmos.com/calculator/xaee0lvsnc";
+        SPECIAL_CONNECT_4 = "https://www.desmos.com/calculator/n1ezl89mto";
     }
 
-    let desmos = Desmos::from_url(SNUB_SQUARE).unwrap();
+    let desmos = Desmos::from_url(SPECIAL_CONNECT_4).unwrap();
     desmos::rendering::window(desmos);
 
     // println!("{:?}", size_of::<EvalTree>());

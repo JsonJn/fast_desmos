@@ -186,14 +186,16 @@ fn parse_stmt_v(s: &serde_json::Value) -> Statement {
         println!("too long!");
     }
     // println!("{string}");
-    let (lexed, _) = Lexer::lex(string).unwrap();
+    let (lexed, _) = Lexer::lex(string).expect("Statement lexing failed!");
     // println!("{lexed:?}");
-    Parser::parse(lexed).unwrap()
+    Parser::parse(lexed).expect("Statement parsing failed!")
 }
 
 fn parse_act_expr(s: &serde_json::Value) -> ActExpr {
-    Parser::parse_action_expr(Lexer::lex(s.as_str().unwrap().to_string()).unwrap().0)
-        .unwrap()
+    let s = s.as_str().unwrap().to_string();
+    println!("{s:?}");
+    Parser::parse_action_expr(Lexer::lex(s).unwrap().0)
+        .expect("ActExpr parsing failed!")
         .to_act_expr()
 }
 
