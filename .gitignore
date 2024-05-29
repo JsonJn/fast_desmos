@@ -1,3 +1,7 @@
 /target
 .idea
-web_cache
+/web_cache/
+titles.json
+results.txt
+rewritten.txt
+out.txt
