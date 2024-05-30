@@ -53,7 +53,7 @@ fn main() {
         SPECIAL_CONNECT_4 = "https://www.desmos.com/calculator/n1ezl89mto";
     }
 
-    let desmos = Desmos::from_url(SPECIAL_CONNECT_4).unwrap();
+    let desmos = Desmos::from_url("https://www.desmos.com/calculator/xbebofu2lk").unwrap();
     desmos::rendering::window(desmos);
 
     // println!("{:?}", size_of::<EvalTree>());

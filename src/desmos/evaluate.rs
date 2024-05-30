@@ -1,9 +1,10 @@
-pub use crate::desmos::value::*;
+use std::cell::OnceCell;
+
+use once_cell::sync::Lazy;
+
 pub use context::{Functions, FunctionsBuilder, ValueContext};
 pub use convert::ToEval;
 pub use convert::{IdentifierStorer, IDENTIFIERS};
-use once_cell::sync::Lazy;
-use std::cell::OnceCell;
 pub use tree::*;
 
 use crate::desmos::evaluate::pervasive_applies::{
@@ -11,8 +12,10 @@ use crate::desmos::evaluate::pervasive_applies::{
     pervasive_apply_variadic,
 };
 use crate::desmos::parsing::{AddOrSub, Element, SumOrProduct};
+pub use crate::desmos::value::*;
 use crate::pooled_vec::{PooledVec, VecPool};
 
+mod constness;
 mod context;
 mod convert;
 mod pervasive_applies;

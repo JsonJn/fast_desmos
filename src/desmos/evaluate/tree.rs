@@ -5,6 +5,7 @@ use std::iter;
 use std::sync::atomic::AtomicU32;
 use std::sync::{atomic, OnceLock};
 
+use crate::desmos::evaluate::constness::CanConst;
 use crate::desmos::evaluate::context::{Functions, ValueContext};
 use crate::desmos::evaluate::pervasive_applies::{
     pervasive_apply_comp_variadic_bool, pervasive_apply_known,
@@ -13,7 +14,6 @@ use crate::desmos::evaluate::{
     pervasive_apply_variadic, Evaluable, IDENTIFIERS, POOL_INDICES, POOL_NUMBER, POOL_POINT,
     POOL_PRIMITIVE, POOL_SORT_PAIRS,
 };
-use crate::desmos::execute::CanDepend;
 use crate::desmos::parsing::{AddOrSub, Element, InequalityType, SumOrProduct};
 use crate::desmos::value::{
     Color, CompList, CompPrim, Computable, Point, Polygon, PrimList, Primitive, VarValue,
@@ -31,7 +31,7 @@ pub struct EvalExpr {
 impl EvalExpr {
     pub fn new(tree: EvalTree) -> Self {
         Self {
-            cache: tree.get_deps().is_empty().then(OnceLock::new),
+            cache: tree.get_const_deps().is_empty().then(OnceLock::new),
             expr: Box::new(tree),
         }
     }

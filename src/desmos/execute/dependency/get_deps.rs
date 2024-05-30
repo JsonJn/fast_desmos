@@ -10,15 +10,13 @@ pub trait CanDepend {
 
 impl CanDepend for EvalExpr {
     fn get_deps(&self) -> Vec<usize> {
-        self.expr.get_deps()
+        self.expr.kind.get_deps()
     }
 }
 
 impl<T: CanDepend> CanDepend for Vec<T> {
     fn get_deps(&self) -> Vec<usize> {
-        self.iter()
-            .map(CanDepend::get_deps)
-            .fold(vec![], vec_concat)
+        self.iter().flat_map(CanDepend::get_deps).collect()
     }
 }
 
@@ -58,7 +56,13 @@ impl CanDepend for UserIdent {
 
 impl CanDepend for EvalTree {
     fn get_deps(&self) -> Vec<usize> {
-        match &self.kind {
+        self.kind.get_deps()
+    }
+}
+
+impl CanDepend for EvalKind {
+    fn get_deps(&self) -> Vec<usize> {
+        match &self {
             EvalKind::Ident(i) => i.get_deps(),
             EvalKind::Number(_) => vec![],
             EvalKind::Point { x, y } => vec_concat(x.get_deps(), y.get_deps()),
