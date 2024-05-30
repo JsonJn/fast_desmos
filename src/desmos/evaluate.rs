@@ -1,10 +1,10 @@
+pub use crate::desmos::value::*;
 pub use context::{Functions, FunctionsBuilder, ValueContext};
 pub use convert::ToEval;
 pub use convert::{IdentifierStorer, IDENTIFIERS};
 use once_cell::sync::Lazy;
 use std::cell::OnceCell;
 pub use tree::*;
-pub use value::*;
 
 use crate::desmos::evaluate::pervasive_applies::{
     pervasive_apply_comp_known, pervasive_apply_known, pervasive_apply_non_prim_known,
@@ -17,7 +17,6 @@ mod context;
 mod convert;
 mod pervasive_applies;
 mod tree;
-mod value;
 
 pub static POOL_NUMBER: Lazy<VecPool<f64>> = Lazy::new(VecPool::default);
 pub static POOL_POINT: Lazy<VecPool<Point>> = Lazy::new(VecPool::default);
@@ -322,11 +321,12 @@ impl Evaluable for EvalTree {
                     VarValue::Prim(_) => unreachable!("Indexing can only index lists"),
                     VarValue::List(list) => match index {
                         Computable::Prim(CompPrim::Number(x)) => {
-                            VarValue::Prim(list.get_cloned(x.floor() as usize - 1))
+                            VarValue::Prim(list.get_cloned((x.floor() as usize).wrapping_sub(1)))
                         }
                         Computable::List(CompList::Number(xs)) => VarValue::List(
                             xs.map_different(&POOL_PRIMITIVE, |v| {
-                                list.get_cloned(v.floor() as usize - 1)
+                                let one_index = v.floor() as usize;
+                                list.get_cloned(one_index.wrapping_sub(1))
                             })
                             .into(),
                         ),
@@ -451,17 +451,17 @@ impl Evaluable for EvalTree {
             }
             EvalKind::IfElse { cond, yes, no } => {
                 let cond = cond.evaluate(functions, context);
-                let [yes, no] = [yes, no].map(|v| v.evaluate(functions, context));
 
                 match cond {
                     CondOutput::Prim(cond) => {
                         if cond {
-                            yes
+                            yes.evaluate(functions, context)
                         } else {
-                            no
+                            no.evaluate(functions, context)
                         }
                     }
                     CondOutput::List(bools) => {
+                        let [yes, no] = [yes, no].map(|v| v.evaluate(functions, context));
                         let x = PooledVec::from_iter(
                             &POOL_PRIMITIVE,
                             id,

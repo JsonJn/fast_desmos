@@ -884,6 +884,7 @@ impl Parser {
             Token::Punct(Punctuation::LeftParen) => {
                 let expr = self.parse_act_expr()?;
                 data.eq_else_none(&Token::Punct(Punctuation::RightParen))?;
+                data.accepted();
                 Some(Action::Grouping(ActGrouping { expr }))
             }
             _ => None,

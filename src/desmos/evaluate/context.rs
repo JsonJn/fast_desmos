@@ -1,7 +1,7 @@
 use rustc_hash::FxHashMap;
 
-use crate::desmos::evaluate::value::VarValue;
 use crate::desmos::evaluate::{Function, IdentifierStorer, UserIdent};
+use crate::desmos::value::VarValue;
 
 #[derive(Default)]
 pub struct FunctionsBuilder {

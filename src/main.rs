@@ -26,7 +26,7 @@ macro_rules! strings {
 
 fn main() {
     // use desmos::parsing::{Lexer, Parser};
-    // let raw = r#"\operatorname{polygon}\left(\left(0.5+S_{top},-0.5+P_{s}\left[I_{addLoc}\right].y\right),\left(S_{top}-0.5,-0.5+P_{s}\left[I_{addLoc}\right].y\right),\left(S_{top}-0.5,H+0.5\right),\left(S_{top}+0.5,H+0.5\right)\right)"#.to_string();
+    // let raw = r#"F_{submit}=\left\{S_{top}>0:\left(S_{top}\to0,S_{bottom}\to0,C_{ells}\to L_{set}\left(C_{shifted},I_{addLoc},P_{layer}\right),P_{layer}\to3-P_{layer}\right)\right\}"#.to_string();
     // let (lexed, left) = Lexer::lex(raw).unwrap();
     // let parsed = Parser::parse(lexed).unwrap();
     // println!("{parsed:#?}");

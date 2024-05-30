@@ -1,4 +1,4 @@
-use crate::desmos::evaluate::value::{CompList, CompPrim, Computable};
+use crate::desmos::value::{CompList, CompPrim, Computable};
 
 use std::ops::Neg;
 

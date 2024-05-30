@@ -1,6 +1,6 @@
 use super::list::CompList;
 use super::primitive::CompPrim;
-use crate::desmos::evaluate::value::{PrimList, Primitive, VarValue};
+use crate::desmos::value::{PrimList, Primitive, VarValue};
 
 mod impl_add;
 mod impl_div;
@@ -8,8 +8,6 @@ mod impl_eq;
 mod impl_mul;
 mod impl_neg;
 mod impl_pow;
-
-
 
 #[derive(Debug, Clone)]
 pub enum Computable {

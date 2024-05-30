@@ -1,8 +1,7 @@
-use crate::desmos::evaluate::value::{CompPrim, Computable, Primitive, VarValue};
 use crate::desmos::evaluate::{POOL_BOOL, POOL_PRIMITIVE, POOL_VAR_VALUE};
+use crate::desmos::value::{CompPrim, Computable, Primitive, VarValue};
 use crate::pooled_vec::{Id, PooledVec};
 use crate::take_pat;
-
 
 use std::mem::MaybeUninit;
 

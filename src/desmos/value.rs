@@ -7,7 +7,7 @@ pub use primitive::*;
 use crate::desmos::evaluate::UserIdent;
 use crate::pooled_vec::PooledVec;
 
-use super::tree::EvalExpr;
+use crate::desmos::evaluate::EvalExpr;
 
 mod builtins;
 mod computable;

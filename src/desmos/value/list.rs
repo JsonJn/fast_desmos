@@ -176,8 +176,10 @@ impl CompList {
 
     pub fn get(&self, x: usize) -> CompPrim {
         match self {
-            Self::Number(a) => CompPrim::Number(a[x]),
-            Self::Point(a) => CompPrim::Point(a[x]),
+            Self::Number(a) => CompPrim::Number(a.get(x).copied().unwrap_or(f64::NAN)),
+            Self::Point(a) => {
+                CompPrim::Point(a.get(x).copied().unwrap_or(Point(f64::NAN, f64::NAN)))
+            }
         }
     }
 
@@ -226,8 +228,10 @@ impl NonCompList {
 
     pub fn get_cloned(&self, x: usize) -> NonCompPrim {
         match self {
-            Self::Polygon(a) => NonCompPrim::Polygon(a[x].clone()),
-            Self::Color(a) => NonCompPrim::Color(a[x]),
+            Self::Polygon(a) => {
+                NonCompPrim::Polygon(a.get(x).cloned().unwrap_or(Polygon(Vec::new())))
+            }
+            Self::Color(a) => NonCompPrim::Color(a.get(x).copied().unwrap_or(Color(0, 0, 0))),
         }
     }
 

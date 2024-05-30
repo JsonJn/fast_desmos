@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use crate::desmos::evaluate::value::CompPrim;
+use crate::desmos::value::CompPrim;
 
 impl CompPrim {
     pub fn cmp(self, other: Self) -> Option<Ordering> {

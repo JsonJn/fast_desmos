@@ -13,6 +13,7 @@ pub mod evaluate;
 pub mod execute;
 pub mod parsing;
 pub mod rendering;
+mod value;
 
 use crate::desmos::rendering::drawables::{
     DrawColor, FillOptions, Label, LineOptions, ParametricDomain, PointOptions,
