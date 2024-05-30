@@ -1,4 +1,3 @@
-
 use crate::pooled_vec::PooledVec;
 use std::iter::Sum;
 use std::ops::Add;
@@ -26,7 +25,7 @@ impl Add<CompPrim> for CompList {
         match (self, rhs) {
             (Self::Number(ns), CompPrim::Number(x)) => Self::Number(ns.map_same(|i| i + x)),
             (Self::Point(ns), CompPrim::Point(x)) => Self::Point(ns.map_same(|i| i + x)),
-            (s, rhs) => unreachable!("Cannot add different types: {s:?} + {rhs:?}"),
+            (_s, _rhs) => unreachable!("Cannot add different types: {_s:?} + {_rhs:?}"),
         }
     }
 }

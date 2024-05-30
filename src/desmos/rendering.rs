@@ -405,14 +405,14 @@ pub fn window(params: Desmos) {
                                         &CIRCLE_32
                                     };
 
-                                    if center.distance_to(mouse_pos_world) <= radius {
-                                        if mouse_pressed {
-                                            if let Some(clickable) = clickable {
+                                    if let Some(clickable) = clickable {
+                                        if center.distance_to(mouse_pos_world) <= radius {
+                                            if mouse_pressed {
                                                 run_clickable = Some(clickable);
                                                 click_index = Some(index + 1);
                                             }
+                                            possibly_click = true;
                                         }
-                                        possibly_click = true;
                                     }
 
                                     d2.draw_triangle_fan(
@@ -504,14 +504,14 @@ pub fn window(params: Desmos) {
                                             vecs.reverse();
                                         }
 
-                                        if check_collision_point_poly(mouse_pos_world, &vecs) {
-                                            if mouse_pressed {
-                                                if let Some(clickable) = clickable {
+                                        if let Some(clickable) = clickable {
+                                            if check_collision_point_poly(mouse_pos_world, &vecs) {
+                                                if mouse_pressed {
                                                     run_clickable = Some(clickable);
                                                     click_index = Some(i + 1);
                                                 }
+                                                possibly_click = true;
                                             }
-                                            possibly_click = true;
                                         }
                                         d2.draw_triangle_fan(&vecs, fill_color);
 
@@ -585,7 +585,7 @@ pub fn window(params: Desmos) {
                 None => context.evaluate_act(expr),
             };
 
-            println!("{act_val:?}");
+            // println!("{act_val:?}");
 
             statements.remove_calculations(act_val.pairs.iter().map(|v| v.0));
             context.apply_act_value(act_val);

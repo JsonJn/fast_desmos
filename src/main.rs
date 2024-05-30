@@ -49,6 +49,7 @@ fn main() {
         VECTOR_FIELD = "https://www.desmos.com/calculator/g25eqqco4m";
         TIC_TAC_TOE = "https://www.desmos.com/calculator/le77826l07";
         POINT_SIZES = "https://www.desmos.com/calculator/xaee0lvsnc";
+        MANY_POINT_SIZES = "https://www.desmos.com/calculator/oaho9ryxo1";
         SPECIAL_CONNECT_4 = "https://www.desmos.com/calculator/n1ezl89mto";
     }
 
