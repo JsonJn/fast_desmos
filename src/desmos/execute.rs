@@ -568,4 +568,21 @@ impl AllContext {
         self.context.un_or_set(id, old);
         val
     }
+
+    pub fn eval_act_with_opt<T: ActEvaluable>(
+        &mut self,
+        expr: &T,
+        id: UserIdent,
+        val: Option<VarValue>,
+    ) -> ActValue {
+        let old = val.map(|v| self.context.set_value(id, v));
+        let val = expr.evaluate(
+            &self.act_functions,
+            &mut self.act_context,
+            &self.functions,
+            &mut self.context,
+        );
+        old.map(|o| self.context.un_or_set(id, o));
+        val
+    }
 }

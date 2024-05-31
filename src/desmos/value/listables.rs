@@ -22,6 +22,13 @@ macro_rules! listable_def {
         }
 
         impl $name {
+            pub fn is_one(&self) -> bool {
+                matches!(self, Self::One(_))
+            }
+            pub fn is_many(&self) -> bool {
+                matches!(self, Self::Many(_))
+            }
+
             #[allow(dead_code)]
             pub fn into_iter(self) -> OptIntoIter<$ty> {
                 match self {

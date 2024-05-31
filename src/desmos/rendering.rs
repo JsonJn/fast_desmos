@@ -1,7 +1,9 @@
+use std::num::NonZeroUsize;
+
 use raylib::consts::{MouseButton, MouseCursor};
 use raylib::drawing::{RaylibDrawHandle, RaylibMode2D};
-use raylib::ffi;
 use raylib::prelude::{Camera2D, KeyboardKey, RaylibDraw, RaylibMode2DExt, Vector2};
+use raylib::{check_collision_point_poly, ffi};
 
 use crate::desmos::evaluate::{
     Color, Colors, Conditional, EvalKind, IdentifierStorer, Numbers, Point, Points, Polygon,
@@ -61,28 +63,39 @@ const SCALE_SPEED: f32 = 1.1;
 
 struct Drawer<'a, 'b, 'c> {
     camera: Camera2D,
+    mouse_pos: Vector2,
     context: &'a mut AllContext,
     drawing: &'a mut RaylibMode2D<'b, RaylibDrawHandle<'c>>,
+}
+
+pub enum ClickableInfo<'a> {
+    Hovered,
+    Clicked {
+        clickable: &'a Clickable,
+        index: Option<NonZeroUsize>,
+    },
 }
 
 impl<'a, 'b, 'c> Drawer<'a, 'b, 'c> {
     pub fn new(
         camera2d: Camera2D,
+        mouse_pos: Vector2,
         context: &'a mut AllContext,
         drawing: &'a mut RaylibMode2D<'b, RaylibDrawHandle<'c>>,
     ) -> Self {
         Self {
             camera: camera2d,
+            mouse_pos,
             context,
             drawing,
         }
     }
 
-    fn draw(&mut self, drawable: Drawable) {
+    fn draw<'r>(&mut self, drawable: Drawable<'r>) -> Option<ClickableInfo<'r>> {
         let Drawable {
             draw_index: _,
             color,
-            clickable: _, //TODO: Clickable in general
+            clickable,
             kind,
         } = drawable;
 
@@ -92,15 +105,46 @@ impl<'a, 'b, 'c> Drawer<'a, 'b, 'c> {
             Colors::One(color.color)
         };
 
-        match kind {
-            DrawableType::Parametric(parametric) => self.draw_parametric(parametric, color),
-            DrawableType::Explicit(explicit) => self.draw_explicit(explicit, color),
-            DrawableType::Points(points) => self.draw_points(points, color),
-            DrawableType::Polygons(polygons) => self.draw_polygons(polygons, color),
-        }
+        let check_clickable = clickable.is_some();
+
+        let click_result = match kind {
+            DrawableType::Parametric(parametric) => {
+                self.draw_parametric(parametric, color);
+                None
+            }
+            DrawableType::Explicit(explicit) => {
+                self.draw_explicit(explicit, color);
+                None
+            }
+            DrawableType::Points(points) => self.draw_points(points, color, check_clickable),
+            DrawableType::Polygons(polygons) => {
+                self.draw_polygons(polygons, color, check_clickable)
+            }
+        };
+
+        click_result.map(|index| {
+            if self
+                .drawing
+                .is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT)
+            {
+                ClickableInfo::Clicked {
+                    clickable: clickable.unwrap(),
+                    index: index.map(|x| unsafe { NonZeroUsize::new_unchecked(x + 1) }),
+                }
+            } else {
+                ClickableInfo::Hovered
+            }
+        })
     }
 
-    fn draw_points(&mut self, points: DrawPoints, color: Colors) {
+    fn draw_points(
+        &mut self,
+        points: DrawPoints,
+        color: Colors,
+        check_clickable: bool,
+    ) -> Option<Option<usize>> {
+        let mut clickable = None;
+
         let DrawPoints {
             points,
             point_options,
@@ -141,7 +185,7 @@ impl<'a, 'b, 'c> Drawer<'a, 'b, 'c> {
                 let center: Vector2 = p.into();
                 let Vector2 { x: px, y: py } = center;
 
-                let points: &[(f32, f32)] = if diameter < 20.0 {
+                let circle_points: &[(f32, f32)] = if diameter < 20.0 {
                     &CIRCLE_8
                 } else if diameter < 100.0 {
                     &CIRCLE_16
@@ -149,18 +193,12 @@ impl<'a, 'b, 'c> Drawer<'a, 'b, 'c> {
                     &CIRCLE_32
                 };
 
-                // if let Some(clickable) = clickable {
-                //     if center.distance_to(mouse_pos_world) <= radius {
-                //         if mouse_pressed {
-                //             run_clickable = Some(clickable);
-                //             click_index = Some(index + 1);
-                //         }
-                //         possibly_click = true;
-                //     }
-                // }
+                if check_clickable && center.distance_to(self.mouse_pos) <= radius {
+                    clickable = Some(points.is_many().then_some(index));
+                }
 
                 self.drawing.draw_triangle_fan(
-                    &points
+                    &circle_points
                         .iter()
                         .map(|(x, y)| Vector2::new(px + x * radius, py + y * radius))
                         .collect::<Vec<_>>(),
@@ -185,7 +223,7 @@ impl<'a, 'b, 'c> Drawer<'a, 'b, 'c> {
                 .context
                 .evaluate(thickness)
                 .try_into()
-                .expect("Opacity must be a number");
+                .expect("Thickness must be a number");
 
             for (ps, ((&opacity, &thickness), color)) in points.windows(2).zip(
                 opacity
@@ -203,9 +241,17 @@ impl<'a, 'b, 'c> Drawer<'a, 'b, 'c> {
                 );
             }
         }
+        clickable
     }
 
-    fn draw_polygons(&mut self, polygons: DrawPolygons, color: Colors) {
+    fn draw_polygons(
+        &mut self,
+        polygons: DrawPolygons,
+        color: Colors,
+        check_clickable: bool,
+    ) -> Option<Option<usize>> {
+        let mut clickable = None;
+
         let DrawPolygons {
             polygons,
             fill_options,
@@ -219,7 +265,7 @@ impl<'a, 'b, 'c> Drawer<'a, 'b, 'c> {
                 .try_into()
                 .expect("Opacity must be a number");
 
-            for (i, ((Polygon(points), &opacity), &color)) in polygons
+            for (index, ((Polygon(points), &opacity), &color)) in polygons
                 .iter()
                 .zip(opacity.iter_rep())
                 .zip(color.iter_rep())
@@ -244,16 +290,9 @@ impl<'a, 'b, 'c> Drawer<'a, 'b, 'c> {
                         vecs.reverse();
                     }
 
-                    // TODO: Clickable polygons
-                    // if let Some(clickable) = clickable {
-                    //     if check_collision_point_poly(mouse_pos_world, &vecs) {
-                    //         if mouse_pressed {
-                    //             run_clickable = Some(clickable);
-                    //             click_index = Some(i + 1);
-                    //         }
-                    //         possibly_click = true;
-                    //     }
-                    // }
+                    if check_clickable && check_collision_point_poly(self.mouse_pos, &vecs) {
+                        clickable = Some(polygons.is_many().then_some(index));
+                    }
                     self.drawing.draw_triangle_fan(&vecs, fill_color);
                 }
             }
@@ -296,6 +335,7 @@ impl<'a, 'b, 'c> Drawer<'a, 'b, 'c> {
                 }
             }
         }
+        clickable
     }
 
     fn draw_explicit(&mut self, explicit: ExplicitEq, color: Colors) {
@@ -549,10 +589,6 @@ pub fn window(params: DesmosPage) {
         let mouse_pos_world = rl.get_screen_to_world2D(rl.get_mouse_position(), camera);
         let mouse_pressed = rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT);
 
-        let mut run_clickable: Option<&Clickable> = None;
-        let mut click_index: Option<usize> = None;
-        let mut possibly_click: bool = false;
-
         let dt = rl.get_frame_time();
         for (key, vec) in KEY_OFFSETS {
             if rl.is_key_down(key) {
@@ -561,37 +597,47 @@ pub fn window(params: DesmosPage) {
         }
 
         camera.zoom *= SCALE_SPEED.powf(rl.get_mouse_wheel_move());
-        {
+        let clickable_val = {
             let mut d = rl.begin_drawing(&thread);
 
             d.clear_background(raylib::prelude::Color::WHITE);
-            {
+            let clickable_val = {
                 let mut d2 = d.begin_mode2D(camera);
-                let mut drawer = Drawer::new(camera, &mut context, &mut d2);
+                let mut drawer = Drawer::new(camera, mouse_pos_world, &mut context, &mut d2);
 
+                let mut clickable_result = None;
                 for drawable in drawables {
-                    drawer.draw(drawable);
+                    let this_result = drawer.draw(drawable);
+                    if let Some(result) = this_result {
+                        clickable_result = Some(result);
+                    }
                 }
-            }
-            d.draw_fps(0, 0);
-        }
 
-        if possibly_click {
-            rl.set_mouse_cursor(MouseCursor::MOUSE_CURSOR_POINTING_HAND);
-        } else {
-            rl.set_mouse_cursor(MouseCursor::MOUSE_CURSOR_DEFAULT);
-        }
+                if let Some(ClickableInfo::Hovered) = clickable_result {
+                    d2.set_mouse_cursor(MouseCursor::MOUSE_CURSOR_POINTING_HAND);
+                } else {
+                    d2.set_mouse_cursor(MouseCursor::MOUSE_CURSOR_DEFAULT);
+                }
 
-        if let Some(Clickable { expr }) = run_clickable {
-            let act_val = match click_index {
-                Some(index) => context.evaluate_act_with(
-                    expr,
-                    IdentifierStorer::IDENT_INDEX,
-                    VarValue::number(index as f64),
-                ),
-                None => context.evaluate_act(expr),
+                if let Some(ClickableInfo::Clicked {
+                    clickable: Clickable { expr },
+                    index,
+                }) = clickable_result
+                {
+                    Some(context.eval_act_with_opt(
+                        expr,
+                        IdentifierStorer::IDENT_INDEX,
+                        index.map(|i| VarValue::number(usize::from(i) as f64)),
+                    ))
+                } else {
+                    None
+                }
             };
+            d.draw_fps(0, 0);
+            clickable_val
+        };
 
+        if let Some(act_val) = clickable_val {
             // println!("{act_val:?}");
 
             statements.remove_calculations(act_val.pairs.iter().map(|v| v.0));
