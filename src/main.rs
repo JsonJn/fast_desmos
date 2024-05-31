@@ -1,7 +1,7 @@
 // #![allow(dead_code)]
 #![warn(clippy::semicolon_if_nothing_returned, clippy::uninlined_format_args)]
 
-use crate::desmos::Desmos;
+use crate::desmos::DesmosPage;
 
 mod desmos;
 mod gamma;
@@ -53,7 +53,7 @@ fn main() {
         SPECIAL_CONNECT_4 = "https://www.desmos.com/calculator/n1ezl89mto";
     }
 
-    let desmos = Desmos::from_url("https://www.desmos.com/calculator/xbebofu2lk").unwrap();
+    let desmos = DesmosPage::from_url("https://www.desmos.com/calculator/xbebofu2lk").unwrap();
     desmos::rendering::window(desmos);
 
     // println!("{:?}", size_of::<EvalTree>());

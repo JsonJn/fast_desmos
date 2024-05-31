@@ -135,7 +135,7 @@ pub struct Options {
 }
 
 #[derive(Debug)]
-pub struct Desmos {
+pub struct DesmosPage {
     pub cells: Vec<DesmosCell>,
     pub title: String,
     pub min_steps_ms: Option<f64>,
@@ -200,7 +200,7 @@ fn parse_act_expr(s: &serde_json::Value) -> ActExpr {
         .to_act_expr()
 }
 
-impl Desmos {
+impl DesmosPage {
     pub fn from_url(url: &str) -> Option<Self> {
         let url = Url::parse(url).unwrap();
         let ident = url
@@ -362,7 +362,7 @@ impl Desmos {
             })
             .collect();
 
-        Some(Desmos {
+        Some(DesmosPage {
             cells,
             title,
             min_steps_ms,

@@ -1,4 +1,4 @@
-# fast_desmos
+![logo](logo.png)
 
 ## Purpose
 
