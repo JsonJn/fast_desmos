@@ -66,8 +66,10 @@ Have Rust installed, clone the repository, run `cargo run --release` in the proj
 Better ergonomics is planned for the future, but for now, go into `main.rs`, and change the URL used.
 
 ```Rust
-//                               This part is the URL
-//                                vvvvvvvvvvvvvvvvv
-let desmos = DesmosPage::from_url(SPECIAL_CONNECT_4).unwrap();
-//                                ^^^^^^^^^^^^^^^^^
+fn main() {
+    //                               This part is the URL
+    //                                vvvvvvvvvvvvvvvvv
+    let desmos = DesmosPage::from_url(SPECIAL_CONNECT_4).unwrap();
+    //                                ^^^^^^^^^^^^^^^^^
+}
 ```
