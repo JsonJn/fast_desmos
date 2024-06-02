@@ -30,16 +30,16 @@ Empty tick box denotes planned support.
     - [ ] line type
 - [ ] Points
     - [x] Points with custom sizes, opacity, **but not point type**
-    - [ ] draggable
+    - [x] draggable
     - [ ] point type
 - [x] Custom colors (`rgb`, `hsv`)
 - [x] All Builtin functions **except for distributions**
 - [x] Most desmos syntax (if-else, sum, prod, fractions, etc) **except for calculus**
-- [ ] Actions
+- [x] Actions
     - [x] Tickers without the ability to turn them off
-    - [ ] Clickable
+    - [x] Clickable
         - [x] Points
-        - [ ] Polygons
+        - [x] Polygons
 - [ ] Custom control options
     - [ ] keyboard controlled variables / actions
     - [ ] panning points
