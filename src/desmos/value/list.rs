@@ -4,11 +4,21 @@ use super::VarValue;
 use crate::desmos::evaluate::{POOL_COLOR, POOL_NUMBER, POOL_POINT, POOL_POLYGON, POOL_PRIMITIVE};
 use crate::pooled_vec::PooledVec;
 use crate::take_pat;
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PrimList {
     Computable(CompList),
     NonComputable(NonCompList),
+}
+
+impl Display for PrimList {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Computable(x) => Display::fmt(x, f),
+            Self::NonComputable(x) => Display::fmt(x, f),
+        }
+    }
 }
 
 impl PrimList {
@@ -140,6 +150,24 @@ pub enum CompList {
 pub enum NonCompList {
     Color(PooledVec<Color>),
     Polygon(PooledVec<Polygon>),
+}
+
+impl Display for CompList {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Number(x) => Display::fmt(x, f),
+            Self::Point(x) => Display::fmt(x, f),
+        }
+    }
+}
+
+impl Display for NonCompList {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Color(x) => Display::fmt(x, f),
+            Self::Polygon(x) => Display::fmt(x, f),
+        }
+    }
 }
 
 fn unique<T: PartialEq>(mut v: PooledVec<T>) -> PooledVec<T> {

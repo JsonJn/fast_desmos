@@ -50,11 +50,11 @@ fn main() {
         TIC_TAC_TOE = "https://www.desmos.com/calculator/le77826l07";
         POINT_SIZES = "https://www.desmos.com/calculator/xaee0lvsnc";
         MANY_POINT_SIZES = "https://www.desmos.com/calculator/oaho9ryxo1";
-        SPECIAL_CONNECT_4 = "https://www.desmos.com/calculator/n1ezl89mto";
+        SPECIAL_CONNECT_4 = "https://www.desmos.com/calculator/2f5sqp3fok";
         FLICKERING_POINTS = "https://www.desmos.com/calculator/xbebofu2lk";
     }
 
-    let desmos = DesmosPage::from_url(VECTOR_FIELD).unwrap();
+    let desmos = DesmosPage::from_url(SPECIAL_CONNECT_4).unwrap();
     desmos::rendering::window(desmos);
 
     // println!("{:?}", size_of::<EvalTree>());

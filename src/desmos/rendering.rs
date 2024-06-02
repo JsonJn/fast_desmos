@@ -2,12 +2,13 @@ use std::num::NonZeroUsize;
 
 use raylib::consts::{MouseButton, MouseCursor};
 use raylib::drawing::{RaylibDrawHandle, RaylibMode2D};
-use raylib::prelude::{Camera2D, KeyboardKey, RaylibDraw, RaylibMode2DExt, Vector2};
+use raylib::prelude as rl_prelude;
+use raylib::prelude::{Camera2D, KeyboardKey, RaylibDraw, RaylibFont, RaylibMode2DExt, Vector2};
 use raylib::{check_collision_point_poly, ffi};
 
 use crate::desmos::evaluate::{
     Color, Colors, Conditional, EvalKind, IdentifierStorer, Numbers, Point, Points, Polygon,
-    Primitive, VarValue,
+    Primitive, VarValue, IDENTIFIERS,
 };
 use crate::desmos::execute::actions::ActValue;
 use crate::desmos::execute::{convert_cells, AllContext, DragIdent};
@@ -610,6 +611,55 @@ impl<'a, 'b, 'c> Processor<'a, 'b, 'c> {
     }
 }
 
+const FONT_SIZE: f32 = 20.0;
+const SCROLL_SPEED: f32 = 1.0;
+
+pub fn render_eval_view<Font: RaylibFont>(
+    drawing: &mut RaylibDrawHandle,
+    font: &Font,
+    context: &AllContext,
+    scroll_amt: Vector2,
+) {
+    const HEIGHT_PAD: f32 = 5.0;
+    const SPACING: f32 = 1.0;
+    const TEXT_OFFSET: Vector2 = Vector2::new(5.0, 0.0);
+
+    let mut positions = Vec::with_capacity(context.len_values());
+    let mut position = scroll_amt;
+    let mut max_width = f32::NAN;
+    for (&ident, _) in context.iter_values() {
+        let name = IDENTIFIERS.int_to_name(ident).unwrap();
+        let Vector2 { x, y } = font.measure_text(&name, FONT_SIZE, SPACING);
+        max_width = max_width.max(x);
+        positions.push(position);
+        drawing.draw_text_ex(
+            &font,
+            &name,
+            position + TEXT_OFFSET,
+            FONT_SIZE,
+            SPACING,
+            rl_prelude::Color::BLACK,
+        );
+        position.y += y + HEIGHT_PAD;
+    }
+
+    for ((_, value), pos) in context.iter_values().zip(positions) {
+        let string = {
+            let mut s = value.to_string();
+            s.insert_str(0, " = ");
+            s
+        };
+        drawing.draw_text_ex(
+            &font,
+            &string,
+            pos + Vector2::new(max_width, 0.0),
+            FONT_SIZE,
+            SPACING,
+            rl_prelude::Color::BLACK,
+        );
+    }
+}
+
 #[allow(unused)]
 pub fn window(params: DesmosPage) {
     let DesmosPage {
@@ -645,6 +695,12 @@ pub fn window(params: DesmosPage) {
     };
 
     let mut dragging = None;
+    let mut eval_open = false;
+    let mut eval_scroll_amt = Vector2::zero();
+
+    let font = rl
+        .load_font_ex(&thread, "TimesNewRoman.ttf", FONT_SIZE as i32, None)
+        .unwrap();
 
     while !rl.window_should_close() {
         let drawables = statements.cycle(&mut context);
@@ -657,7 +713,17 @@ pub fn window(params: DesmosPage) {
                 camera.target += vec * MOVE_SPEED * dt / camera.zoom;
             }
         }
-        camera.zoom *= SCALE_SPEED.powf(rl.get_mouse_wheel_move());
+
+        if rl.is_key_pressed(KeyboardKey::KEY_TAB) {
+            eval_open = !eval_open;
+        }
+
+        let wheel: Vector2 = rl.get_mouse_wheel_move_v().into();
+        if eval_open {
+            eval_scroll_amt += wheel * FONT_SIZE * SCROLL_SPEED;
+        } else {
+            camera.zoom *= SCALE_SPEED.powf(wheel.y);
+        }
 
         let clickable_val = {
             let mut d = rl.begin_drawing(&thread);
@@ -730,6 +796,10 @@ pub fn window(params: DesmosPage) {
                     _ => None,
                 }
             };
+            if eval_open {
+                render_eval_view(&mut d, &font, &context, eval_scroll_amt);
+            }
+
             d.draw_fps(0, 0);
             clickable_val
         };

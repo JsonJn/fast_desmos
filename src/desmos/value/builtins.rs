@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use std::iter::Sum;
 use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub};
 
@@ -7,6 +8,12 @@ pub struct Point(pub f64, pub f64);
 impl Point {
     pub fn length(self) -> f64 {
         (self.0 * self.0 + self.1 * self.1).sqrt()
+    }
+}
+
+impl Display for Point {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {})", self.0, self.1)
     }
 }
 
@@ -67,6 +74,18 @@ impl Sub<Point> for Point {
 pub struct Polygon(pub Vec<Point>);
 #[derive(Debug, Copy, Clone, PartialEq, Default)]
 pub struct Color(pub u8, pub u8, pub u8);
+
+impl Display for Polygon {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Polygon({:?})", self.0)
+    }
+}
+
+impl Display for Color {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RGB({}, {}, {})", self.0, self.1, self.2)
+    }
+}
 
 impl Color {
     pub fn from_hex(color: &str) -> Self {

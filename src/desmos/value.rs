@@ -3,6 +3,7 @@ pub use computable::*;
 pub use list::*;
 pub use listables::*;
 pub use primitive::*;
+use std::fmt::{Display, Formatter};
 
 use crate::desmos::evaluate::UserIdent;
 use crate::pooled_vec::PooledVec;
@@ -126,6 +127,15 @@ impl TryFrom<VarValue> for Primitive {
         match value {
             VarValue::Prim(p) => Ok(p),
             VarValue::List(l) => Err(l),
+        }
+    }
+}
+
+impl Display for VarValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VarValue::Prim(x) => Display::fmt(x, f),
+            VarValue::List(x) => Display::fmt(x, f),
         }
     }
 }

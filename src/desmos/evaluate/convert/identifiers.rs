@@ -1,11 +1,11 @@
-use std::sync::Mutex;
+use std::sync::{Arc, RwLock};
 
 use crate::desmos::evaluate::tree::Builtins;
 use crate::desmos::evaluate::{tree, UserIdent};
 use crate::desmos::parsing;
 
 pub struct IdentifierStorer {
-    pub idents: Mutex<Vec<String>>,
+    pub idents: RwLock<Vec<Arc<String>>>,
 }
 
 impl IdentifierStorer {
@@ -29,22 +29,27 @@ impl IdentifierStorer {
 
     pub fn new() -> Self {
         Self {
-            idents: Mutex::new(Self::RESERVED_NAMES.map(ToString::to_string).to_vec()),
+            idents: RwLock::new(
+                Self::RESERVED_NAMES
+                    .map(ToString::to_string)
+                    .map(Arc::new)
+                    .to_vec(),
+            ),
         }
     }
 
     pub fn name_to_int(&self, name: &str) -> UserIdent {
-        let mut idents = self.idents.lock().unwrap();
-        let pos = idents.iter().position(|v| v == name);
+        let mut idents = self.idents.write().unwrap();
+        let pos = idents.iter().position(|v| v.as_str() == name);
 
         UserIdent(pos.unwrap_or_else(|| {
-            idents.push(name.to_string());
+            idents.push(Arc::new(name.to_string()));
             idents.len() - 1
         }))
     }
 
-    pub fn int_to_name(&self, i: UserIdent) -> Option<String> {
-        let guard = self.idents.lock().unwrap();
+    pub fn int_to_name(&self, i: UserIdent) -> Option<Arc<String>> {
+        let guard = self.idents.read().unwrap();
         guard.get(i.0).cloned()
     }
 

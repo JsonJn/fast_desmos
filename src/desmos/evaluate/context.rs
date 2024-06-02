@@ -59,6 +59,15 @@ impl ValueContext {
     pub fn new() -> Self {
         Self::default()
     }
+    pub fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&UserIdent, &VarValue)> {
+        self.values
+            .iter()
+            .filter(|x| !IdentifierStorer::RESERVED_IDENTS.contains(x.0))
+    }
 
     pub fn unset(&mut self, ident: UserIdent) {
         self.values.remove(&ident);

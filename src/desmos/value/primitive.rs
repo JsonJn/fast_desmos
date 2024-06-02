@@ -1,4 +1,5 @@
 use super::builtins::*;
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Primitive {
@@ -9,6 +10,15 @@ pub enum Primitive {
 impl Default for Primitive {
     fn default() -> Self {
         Self::Computable(CompPrim::Number(0.0))
+    }
+}
+
+impl Display for Primitive {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Computable(x) => Display::fmt(x, f),
+            Self::NonComputable(x) => Display::fmt(x, f),
+        }
     }
 }
 
@@ -63,4 +73,22 @@ pub enum CompPrim {
 pub enum NonCompPrim {
     Polygon(Polygon),
     Color(Color),
+}
+
+impl Display for CompPrim {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Number(x) => Display::fmt(x, f),
+            Self::Point(x) => Display::fmt(x, f),
+        }
+    }
+}
+
+impl Display for NonCompPrim {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Polygon(x) => Display::fmt(x, f),
+            Self::Color(x) => Display::fmt(x, f),
+        }
+    }
 }

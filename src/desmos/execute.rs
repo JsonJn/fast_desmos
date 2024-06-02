@@ -589,6 +589,14 @@ impl AllContext {
         }
     }
 
+    pub fn iter_values(&self) -> impl Iterator<Item = (&UserIdent, &VarValue)> {
+        self.context.iter()
+    }
+
+    pub fn len_values(&self) -> usize {
+        self.context.len()
+    }
+
     pub fn evaluate<T: Evaluable>(&mut self, expr: &T) -> VarValue {
         expr.evaluate(&self.functions, &mut self.context)
     }

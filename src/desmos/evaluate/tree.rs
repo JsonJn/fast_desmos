@@ -276,7 +276,9 @@ impl TriadicPervasive {
         match self {
             TriadicPervasive::Rgb => Primitive::color(Color(a as u8, b as u8, c as u8)),
             TriadicPervasive::Hsv => {
-                let h = (a * 360.0) % 360.0;
+                // println!("hsv input: {a} {b} {c}");
+
+                let h = a % 360.0;
                 let s = b.max(0.0).min(1.0);
                 let v = c.max(0.0).min(1.0);
 

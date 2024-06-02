@@ -186,6 +186,7 @@ impl Lexer {
                 }
             });
             data.must_equal(b'}');
+            ident.push(b'_');
             ident.append(&mut name_part);
         }
 

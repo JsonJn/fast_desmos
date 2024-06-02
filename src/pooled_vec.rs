@@ -1,4 +1,4 @@
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::mem::{size_of, ManuallyDrop};
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::sync::RwLock;
@@ -158,6 +158,13 @@ pub struct PooledVec<T: 'static> {
     pool: &'static VecPool<T>,
     internal_id: InternalId,
     vec: ManuallyDrop<Vec<T>>,
+}
+
+impl<T: 'static + Debug> Display for PooledVec<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let vec: &Vec<_> = &self.vec;
+        Debug::fmt(vec, f)
+    }
 }
 
 impl<T: PartialEq> PartialEq for PooledVec<T> {
