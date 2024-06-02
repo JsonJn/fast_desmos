@@ -152,7 +152,8 @@ impl Drop for WebCache {
 
 #[derive(Default, Debug, Copy, Clone)]
 pub struct StoredDragMode {
-    drag: bool,
+    x: bool,
+    y: bool,
 }
 
 #[derive(Debug)]
@@ -206,25 +207,25 @@ fn parse_expr(s: String) -> EvalExpr {
 
 fn parse_expr_v(s: &serde_json::Value) -> EvalExpr {
     let text = s.as_str().unwrap().to_string();
-    println!("{text}");
+    // println!("{text}");
     let text = Lexer::lex(text).unwrap().0;
     Parser::parse_expr(text).unwrap().to_eval()
 }
 
 fn parse_expr_v_option(s: &serde_json::Value) -> Option<EvalExpr> {
     let text = s.as_str()?.to_string();
-    println!("{text}");
+    // println!("{text}");
     let text = Lexer::lex(text)?.0;
     Some(Parser::parse_expr(text)?.to_eval())
 }
 
 fn parse_stmt_v(s: &serde_json::Value) -> Statement {
     let string = s.as_str().unwrap().to_string();
-    if string.len() < 1000 {
-        println!("{string}");
-    } else {
-        println!("too long!");
-    }
+    // if string.len() < 1000 {
+    //     println!("{string}");
+    // } else {
+    //     println!("too long!");
+    // }
     // println!("{string}");
     let (lexed, _) = Lexer::lex(string).expect("Statement lexing failed!");
     // println!("{lexed:?}");
@@ -379,17 +380,22 @@ impl DesmosPage {
                         .map(|v| v.as_bool().unwrap())
                         .unwrap_or(false);
 
-                    let clickable = expr.get("clickableInfo").map(|v| Clickable {
-                        expr: parse_act_expr(v.as_object().unwrap().get("latex").unwrap()),
+                    let clickable = expr.get("clickableInfo").and_then(|v| {
+                        let clickable = v.as_object().unwrap();
+                        println!("{clickable:?}");
+                        Some(Clickable {
+                            expr: parse_act_expr(clickable.get("latex")?),
+                        })
                     });
 
                     // Drag Mode
                     let drag_mode = expr.get("dragMode").map(|v| {
                         let name = v.as_str().unwrap();
                         match name {
-                            "NONE" => StoredDragMode { drag: false },
-                            "X" | "Y" => unreachable!("Axial drag modes not supported yet."),
-                            "XY" => StoredDragMode { drag: true },
+                            "NONE" => StoredDragMode { x: false, y: false },
+                            "X" => StoredDragMode { x: true, y: false },
+                            "Y" => StoredDragMode { x: false, y: true },
+                            "XY" => StoredDragMode { x: true, y: true },
                             _what => unreachable!("Unknown drag mode: {_what:?}"),
                         }
                     });

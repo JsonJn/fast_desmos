@@ -59,8 +59,28 @@ pub struct Constant<'a> {
 
 #[derive(Debug, Copy, Clone)]
 pub enum DragIdent {
-    Point(UserIdent),
-    XY { x: UserIdent, y: UserIdent },
+    Point {
+        ident: UserIdent,
+        x: bool,
+        y: bool,
+    },
+    XY {
+        x: Option<UserIdent>,
+        y: Option<UserIdent>,
+    },
+}
+
+impl DragIdent {
+    pub fn xy(x: Option<UserIdent>, y: Option<UserIdent>) -> Self {
+        Self::XY { x, y }
+    }
+
+    pub fn should_xy(&self) -> (bool, bool) {
+        match self {
+            DragIdent::Point { x, y, .. } => (*x, *y),
+            DragIdent::XY { x, y } => (x.is_some(), y.is_some()),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -78,35 +98,70 @@ impl Statement<'_> {
         expr: EvalExpr,
         drawable_options: DrawableOptions,
     ) -> Self {
-        let drag_mode = drawable_options.options.drag_mode.map(|x| x.drag);
+        let drag_mode = drawable_options.options.drag_mode.map(|x| (x.x, x.y));
         //FIXME: I hate this too
         let drag_mode = match drag_mode {
-            should_be @ (None | Some(true)) => {
-                let should_be = should_be.is_some();
+            Some((false, false)) => None,
+            should_be @ (None | Some((_, _))) => {
                 let result = (|| {
                     if let EvalKind::Point { x, y } = &expr.expr.kind {
                         match (&x.expr.kind, &y.expr.kind) {
                             (EvalKind::Number(_), EvalKind::Number(_)) => {
-                                if let Some(id) = ident {
-                                    return Some(DragIdent::Point(id));
+                                if let Some(ident) = ident {
+                                    return Some(DragIdent::Point {
+                                        ident,
+                                        x: true,
+                                        y: true,
+                                    });
                                 }
                             }
                             (&EvalKind::Ident(x), &EvalKind::Ident(y)) => {
-                                return Some(DragIdent::XY { x, y })
+                                return Some(DragIdent::xy(Some(x), Some(y)))
                             }
+                            (&EvalKind::Ident(x), _) => return Some(DragIdent::xy(Some(x), None)),
+                            (_, &EvalKind::Ident(y)) => return Some(DragIdent::xy(None, Some(y))),
                             _ => {}
                         }
                     }
                     None
                 })();
 
-                if should_be && result.is_none() {
-                    unreachable!("Undraggable point cannot be dragged.")
+                fn align(should: bool, is: bool) -> bool {
+                    match (should, is) {
+                        (true, false) => unreachable!("Cannot drag undraggable point"),
+                        (false, false) => false,
+                        (false, true) => false,
+                        (true, true) => true,
+                    }
                 }
 
-                result
+                fn align_opt<T>(should: bool, is: Option<T>) -> Option<T> {
+                    match (should, is) {
+                        (true, None) => unreachable!("Cannot drag undraggable point"),
+                        (false, None) => None,
+                        (false, Some(x)) => Some(x),
+                        (true, Some(x)) => Some(x),
+                    }
+                }
+
+                match should_be {
+                    None => result,
+                    Some((sx, sy)) => Some(
+                        match result
+                            .unwrap_or_else(|| unreachable!("Cannot drag undraggable point"))
+                        {
+                            DragIdent::Point { ident, x, y } => DragIdent::Point {
+                                ident,
+                                x: align(sx, x),
+                                y: align(sy, y),
+                            },
+                            DragIdent::XY { x, y } => {
+                                DragIdent::xy(align_opt(sx, x), align_opt(sy, y))
+                            }
+                        },
+                    ),
+                }
             }
-            Some(false) => None,
         };
 
         Self {

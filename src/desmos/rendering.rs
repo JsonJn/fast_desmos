@@ -67,6 +67,7 @@ const SCALE_SPEED: f32 = 1.1;
 struct Processor<'a, 'b, 'c> {
     camera: Camera2D,
     mouse_pos: Vector2,
+    zoom: f32,
     context: &'a mut AllContext,
     drawing: &'a mut RaylibMode2D<'b, RaylibDrawHandle<'c>>,
 }
@@ -103,12 +104,14 @@ impl<'a, 'b, 'c> Processor<'a, 'b, 'c> {
     pub fn new(
         camera2d: Camera2D,
         mouse_pos: Vector2,
+        zoom: f32,
         context: &'a mut AllContext,
         drawing: &'a mut RaylibMode2D<'b, RaylibDrawHandle<'c>>,
     ) -> Self {
         Self {
             camera: camera2d,
             mouse_pos,
+            zoom,
             context,
             drawing,
         }
@@ -234,7 +237,7 @@ impl<'a, 'b, 'c> Processor<'a, 'b, 'c> {
                 )
                 .enumerate()
             {
-                let radius = diameter as f32 / 2.0 / self.camera.zoom;
+                let radius = diameter as f32 / 2.0 / self.zoom;
 
                 let center: Vector2 = p.into();
                 let Vector2 { x: px, y: py } = center;
@@ -307,12 +310,8 @@ impl<'a, 'b, 'c> Processor<'a, 'b, 'c> {
             ) {
                 let line_color = color.with_opacity(opacity);
                 let [this, next]: [Point; 2] = ps.try_into().unwrap();
-                self.drawing.draw_line_ex(
-                    this,
-                    next,
-                    thickness as f32 / self.camera.zoom,
-                    line_color,
-                );
+                self.drawing
+                    .draw_line_ex(this, next, thickness as f32 / self.zoom, line_color);
             }
         }
 
@@ -404,12 +403,8 @@ impl<'a, 'b, 'c> Processor<'a, 'b, 'c> {
                 for i in 0..points.len() {
                     let this = points[i];
                     let next = points[(i + 1) % points.len()];
-                    self.drawing.draw_line_ex(
-                        this,
-                        next,
-                        thickness as f32 / self.camera.zoom,
-                        line_color,
-                    );
+                    self.drawing
+                        .draw_line_ex(this, next, thickness as f32 / self.zoom, line_color);
                 }
             }
         }
@@ -541,7 +536,7 @@ impl<'a, 'b, 'c> Processor<'a, 'b, 'c> {
                         self.drawing.draw_line_ex(
                             kind.get_point(min, min_dest),
                             kind.get_point(max, max_dest),
-                            thickness as f32 / self.camera.zoom,
+                            thickness as f32 / self.zoom,
                             color.with_opacity(opacity),
                         );
                     }
@@ -603,7 +598,7 @@ impl<'a, 'b, 'c> Processor<'a, 'b, 'c> {
                 self.drawing.draw_line_ex(
                     start,
                     end,
-                    thick as f32 / self.camera.zoom,
+                    thick as f32 / self.zoom,
                     color.with_opacity(opacity),
                 )
             }
@@ -697,14 +692,20 @@ pub fn window(params: DesmosPage) {
     let mut dragging = None;
     let mut eval_open = false;
     let mut eval_scroll_amt = Vector2::zero();
+    let mut run_ticker = false;
+    let mut scale = width_ratio;
 
     let font = rl
         .load_font_ex(&thread, "TimesNewRoman.ttf", FONT_SIZE as i32, None)
         .unwrap();
 
     while !rl.window_should_close() {
+        // println!("FRAME START");
+
         let drawables = statements.cycle(&mut context);
-        let act_val = ticker.as_ref().map(|func| context.evaluate_act(&func.expr));
+        let act_val = run_ticker
+            .then(|| ticker.as_ref().map(|func| context.evaluate_act(&func.expr)))
+            .flatten();
         let mouse_pos_world = rl.get_screen_to_world2D(rl.get_mouse_position(), camera);
 
         let dt = rl.get_frame_time();
@@ -714,15 +715,22 @@ pub fn window(params: DesmosPage) {
             }
         }
 
-        if rl.is_key_pressed(KeyboardKey::KEY_TAB) {
+        if rl.is_key_pressed(KeyboardKey::KEY_F3) {
             eval_open = !eval_open;
+        }
+        if rl.is_key_pressed(KeyboardKey::KEY_SPACE) {
+            run_ticker = !run_ticker;
         }
 
         let wheel: Vector2 = rl.get_mouse_wheel_move_v().into();
         if eval_open {
             eval_scroll_amt += wheel * FONT_SIZE * SCROLL_SPEED;
         } else {
-            camera.zoom *= SCALE_SPEED.powf(wheel.y);
+            if rl.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) {
+                scale *= SCALE_SPEED.powf(wheel.y);
+            } else {
+                camera.zoom *= SCALE_SPEED.powf(wheel.y);
+            }
         }
 
         let clickable_val = {
@@ -732,7 +740,8 @@ pub fn window(params: DesmosPage) {
 
             let clickable_val = {
                 let mut d2 = d.begin_mode2D(camera);
-                let mut drawer = Processor::new(camera, mouse_pos_world, &mut context, &mut d2);
+                let mut drawer =
+                    Processor::new(camera, mouse_pos_world, scale, &mut context, &mut d2);
 
                 let mut clickable_result = None;
                 for drawable in drawables {
@@ -771,23 +780,37 @@ pub fn window(params: DesmosPage) {
                         points,
                     }) => {
                         let new_pos = d2.get_screen_to_world2D(d2.get_mouse_position(), camera);
-                        let new_pos = Point(new_pos.x as f64, -new_pos.y as f64);
+                        let new_pos = (new_pos.x as f64, -new_pos.y as f64);
+                        let (sx, sy) = ident.should_xy();
 
                         let new_value = match (index, points) {
                             (Some(index), Points::Many(mut points)) => {
                                 let index = index.get();
-                                points[index] = new_pos;
+                                if sx {
+                                    points[index].0 = new_pos.0;
+                                }
+                                if sy {
+                                    points[index].1 = new_pos.1;
+                                }
                                 Points::Many(points)
                             }
-                            (None, Points::One(point)) => Points::One(new_pos),
+                            (None, Points::One(point)) => Points::One(Point(
+                                if sx { new_pos.0 } else { point.0 },
+                                if sy { new_pos.1 } else { point.1 },
+                            )),
                             _ => unreachable!("Misaligned index and points"),
                         };
 
                         let pairs = match ident {
-                            DragIdent::Point(id) => vec![(id, VarValue::from(new_value))],
+                            DragIdent::Point { ident, x, y } => {
+                                vec![(ident, VarValue::from(new_value))]
+                            }
                             DragIdent::XY { x, y } => {
                                 let (vx, vy) = new_value.to_coords();
-                                vec![(x, VarValue::from(vx)), (y, VarValue::from(vy))]
+                                let mut result = Vec::with_capacity(2);
+                                result.extend(x.map(|id| (id, VarValue::from(vx))));
+                                result.extend(y.map(|id| (id, VarValue::from(vy))));
+                                result
                             }
                         };
 

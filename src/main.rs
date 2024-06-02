@@ -52,9 +52,10 @@ fn main() {
         MANY_POINT_SIZES = "https://www.desmos.com/calculator/oaho9ryxo1";
         SPECIAL_CONNECT_4 = "https://www.desmos.com/calculator/2f5sqp3fok";
         FLICKERING_POINTS = "https://www.desmos.com/calculator/xbebofu2lk";
+        BLINDMOKU = "https://www.desmos.com/calculator/w6dk818fbz";
     }
 
-    let desmos = DesmosPage::from_url(SPECIAL_CONNECT_4).unwrap();
+    let desmos = DesmosPage::from_url(BLINDMOKU).unwrap();
     desmos::rendering::window(desmos);
 
     // println!("{:?}", size_of::<EvalTree>());
