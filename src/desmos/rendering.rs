@@ -9,7 +9,8 @@ use crate::desmos::evaluate::{
     Color, Colors, Conditional, EvalKind, IdentifierStorer, Numbers, Point, Points, Polygon,
     Primitive, VarValue,
 };
-use crate::desmos::execute::{convert_cells, AllContext};
+use crate::desmos::execute::actions::ActValue;
+use crate::desmos::execute::{convert_cells, AllContext, DragIdent};
 use crate::desmos::parsing::InequalityType;
 use crate::desmos::rendering::circles::{CIRCLE_16, CIRCLE_32, CIRCLE_8};
 use crate::desmos::rendering::drawables::{
@@ -17,6 +18,7 @@ use crate::desmos::rendering::drawables::{
     LineOptions, ParametricDomain, ParametricEq, PointOptions,
 };
 use crate::desmos::{Clickable, DesmosPage, Viewport};
+use crate::pooled_vec::Id;
 
 mod circles;
 pub mod drawables;
@@ -61,7 +63,7 @@ const KEY_OFFSETS: [(KeyboardKey, Vector2); 4] = [
 const MOVE_SPEED: f32 = 1000.0;
 const SCALE_SPEED: f32 = 1.1;
 
-struct Drawer<'a, 'b, 'c> {
+struct Processor<'a, 'b, 'c> {
     camera: Camera2D,
     mouse_pos: Vector2,
     context: &'a mut AllContext,
@@ -70,13 +72,33 @@ struct Drawer<'a, 'b, 'c> {
 
 pub enum ClickableInfo<'a> {
     Hovered,
+    Dragged {
+        id: Id,
+        ident: DragIdent,
+        index: Option<NonZeroUsize>,
+        points: Points,
+    },
     Clicked {
         clickable: &'a Clickable,
         index: Option<NonZeroUsize>,
     },
 }
 
-impl<'a, 'b, 'c> Drawer<'a, 'b, 'c> {
+pub struct PointDrawResult {
+    index: Option<usize>,
+    dragged: Option<(DragIdent, Id, Points)>,
+}
+
+impl From<Option<usize>> for PointDrawResult {
+    fn from(value: Option<usize>) -> Self {
+        Self {
+            index: value,
+            dragged: None,
+        }
+    }
+}
+
+impl<'a, 'b, 'c> Processor<'a, 'b, 'c> {
     pub fn new(
         camera2d: Camera2D,
         mouse_pos: Vector2,
@@ -91,9 +113,13 @@ impl<'a, 'b, 'c> Drawer<'a, 'b, 'c> {
         }
     }
 
-    fn draw<'r>(&mut self, drawable: Drawable<'r>) -> Option<ClickableInfo<'r>> {
+    fn process<'r>(
+        &mut self,
+        drawable: Drawable<'r>,
+        dragging: Option<Id>,
+    ) -> Option<ClickableInfo<'r>> {
         let Drawable {
-            draw_index: _,
+            id,
             color,
             clickable,
             kind,
@@ -105,7 +131,7 @@ impl<'a, 'b, 'c> Drawer<'a, 'b, 'c> {
             Colors::One(color.color)
         };
 
-        let check_clickable = clickable.is_some();
+        let check_click = clickable.is_some();
 
         let click_result = match kind {
             DrawableType::Parametric(parametric) => {
@@ -116,41 +142,68 @@ impl<'a, 'b, 'c> Drawer<'a, 'b, 'c> {
                 self.draw_explicit(explicit, color);
                 None
             }
-            DrawableType::Points(points) => self.draw_points(points, color, check_clickable),
-            DrawableType::Polygons(polygons) => {
-                self.draw_polygons(polygons, color, check_clickable)
-            }
+            DrawableType::Points(points) => self.process_points(
+                id,
+                dragging.is_some_and(|v| v == id),
+                points,
+                color,
+                check_click,
+            ),
+            DrawableType::Polygons(polygons) => self
+                .draw_polygons(polygons, color, check_click)
+                .map(From::from),
         };
 
-        click_result.map(|index| {
-            if self
-                .drawing
-                .is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT)
-            {
-                ClickableInfo::Clicked {
-                    clickable: clickable.unwrap(),
-                    index: index.map(|x| unsafe { NonZeroUsize::new_unchecked(x + 1) }),
+        click_result.map(|result| {
+            let PointDrawResult { dragged, index } = result;
+
+            match dragged {
+                None => {
+                    match self
+                        .drawing
+                        .is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT)
+                    {
+                        true => ClickableInfo::Clicked {
+                            index: index.map(|x| unsafe { NonZeroUsize::new_unchecked(x + 1) }),
+                            clickable: clickable.unwrap(),
+                        },
+                        false => ClickableInfo::Hovered,
+                    }
                 }
-            } else {
-                ClickableInfo::Hovered
+                Some((dragged, id, points)) => {
+                    match self
+                        .drawing
+                        .is_mouse_button_down(MouseButton::MOUSE_BUTTON_LEFT)
+                    {
+                        true => ClickableInfo::Dragged {
+                            id,
+                            index: index.map(|x| unsafe { NonZeroUsize::new_unchecked(x + 1) }),
+                            ident: dragged,
+                            points,
+                        },
+                        false => ClickableInfo::Hovered,
+                    }
+                }
             }
         })
     }
 
-    fn draw_points(
+    fn process_points(
         &mut self,
+        id: Id,
+        dragging: bool,
         points: DrawPoints,
         color: Colors,
         check_clickable: bool,
-    ) -> Option<Option<usize>> {
-        let mut clickable = None;
-
+    ) -> Option<PointDrawResult> {
         let DrawPoints {
             points,
             point_options,
             line_options,
+            draggable,
         } = points;
 
+        let mut click_index = None;
         if let Some(PointOptions {
             opacity,
             kind: _, //TODO: Point kind
@@ -193,8 +246,16 @@ impl<'a, 'b, 'c> Drawer<'a, 'b, 'c> {
                     &CIRCLE_32
                 };
 
-                if check_clickable && center.distance_to(self.mouse_pos) <= radius {
-                    clickable = Some(points.is_many().then_some(index));
+                if (draggable.is_some() || check_clickable)
+                    && (dragging
+                        || center.distance_to(self.mouse_pos)
+                            <= if draggable.is_some() {
+                                radius * 2.0
+                            } else {
+                                radius
+                            })
+                {
+                    click_index = Some(points.is_many().then_some(index));
                 }
 
                 self.drawing.draw_triangle_fan(
@@ -204,6 +265,18 @@ impl<'a, 'b, 'c> Drawer<'a, 'b, 'c> {
                         .collect::<Vec<_>>(),
                     color.with_opacity(opacity),
                 );
+
+                if draggable.is_some() {
+                    self.drawing.draw_triangle_fan(
+                        &circle_points
+                            .iter()
+                            .map(|(x, y)| {
+                                Vector2::new(px + x * radius * 2.0, py + y * radius * 2.0)
+                            })
+                            .collect::<Vec<_>>(),
+                        color.with_opacity(opacity * 0.35),
+                    );
+                }
             }
         }
 
@@ -241,7 +314,11 @@ impl<'a, 'b, 'c> Drawer<'a, 'b, 'c> {
                 );
             }
         }
-        clickable
+
+        click_index.map(|index| PointDrawResult {
+            index,
+            dragged: draggable.map(|ident| (ident, id, points)),
+        })
     }
 
     fn draw_polygons(
@@ -361,7 +438,7 @@ impl<'a, 'b, 'c> Drawer<'a, 'b, 'c> {
 
             let src_expr = EvalKind::Ident(src_ident);
 
-            //TODO: 🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮
+            //FIXME: I hate this omg 🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮🤮
             let ((min_bound, max_bound), expr) = (|| {
                 let equation_clone = equation.expr.as_ref();
                 if let EvalKind::Multiply(exprs) = &equation_clone.kind {
@@ -567,27 +644,12 @@ pub fn window(params: DesmosPage) {
         ..Default::default()
     };
 
-    // let mut frame_counter: u128 = 0;
-    // let last_frame_start = Instant::now();
-    while !rl.window_should_close() {
-        // frame_counter += 1;
-        // if frame_counter % 30 == 0 {
-        //     let took = last_frame_start.elapsed().as_secs_f32();
-        //     let fps = (frame_counter as f32) / took;
-        //     println!("fps: {}", fps.round());
-        // }
+    let mut dragging = None;
 
-        // let execute_start = Instant::now();
+    while !rl.window_should_close() {
         let drawables = statements.cycle(&mut context);
         let act_val = ticker.as_ref().map(|func| context.evaluate_act(&func.expr));
-        // if frame_counter % 1000 == 0 {
-        //     println!("{} drawables on frame {frame_counter}", drawables.len());
-        // }
-        // let execute_elapsed = execute_start.elapsed();
-        // println!("Execute took {execute_elapsed:?}");
-
         let mouse_pos_world = rl.get_screen_to_world2D(rl.get_mouse_position(), camera);
-        let mouse_pressed = rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT);
 
         let dt = rl.get_frame_time();
         for (key, vec) in KEY_OFFSETS {
@@ -595,42 +657,77 @@ pub fn window(params: DesmosPage) {
                 camera.target += vec * MOVE_SPEED * dt / camera.zoom;
             }
         }
-
         camera.zoom *= SCALE_SPEED.powf(rl.get_mouse_wheel_move());
+
         let clickable_val = {
             let mut d = rl.begin_drawing(&thread);
 
             d.clear_background(raylib::prelude::Color::WHITE);
+
             let clickable_val = {
                 let mut d2 = d.begin_mode2D(camera);
-                let mut drawer = Drawer::new(camera, mouse_pos_world, &mut context, &mut d2);
+                let mut drawer = Processor::new(camera, mouse_pos_world, &mut context, &mut d2);
 
                 let mut clickable_result = None;
                 for drawable in drawables {
-                    let this_result = drawer.draw(drawable);
+                    let this_result = drawer.process(drawable, dragging);
                     if let Some(result) = this_result {
                         clickable_result = Some(result);
                     }
                 }
 
-                if let Some(ClickableInfo::Hovered) = clickable_result {
-                    d2.set_mouse_cursor(MouseCursor::MOUSE_CURSOR_POINTING_HAND);
+                d2.set_mouse_cursor(match clickable_result {
+                    Some(ClickableInfo::Hovered) => MouseCursor::MOUSE_CURSOR_POINTING_HAND,
+                    Some(ClickableInfo::Dragged { .. }) => MouseCursor::MOUSE_CURSOR_RESIZE_ALL,
+                    _ => MouseCursor::MOUSE_CURSOR_DEFAULT,
+                });
+
+                if let Some(ClickableInfo::Dragged { id, .. }) = clickable_result {
+                    dragging = Some(id);
                 } else {
-                    d2.set_mouse_cursor(MouseCursor::MOUSE_CURSOR_DEFAULT);
+                    dragging = None;
                 }
 
-                if let Some(ClickableInfo::Clicked {
-                    clickable: Clickable { expr },
-                    index,
-                }) = clickable_result
-                {
-                    Some(context.eval_act_with_opt(
+                match clickable_result {
+                    Some(ClickableInfo::Clicked {
+                        clickable: Clickable { expr },
+                        index,
+                    }) => Some(context.eval_act_with_opt(
                         expr,
                         IdentifierStorer::IDENT_INDEX,
                         index.map(|i| VarValue::number(usize::from(i) as f64)),
-                    ))
-                } else {
-                    None
+                    )),
+
+                    Some(ClickableInfo::Dragged {
+                        id,
+                        index,
+                        ident,
+                        points,
+                    }) => {
+                        let new_pos = d2.get_screen_to_world2D(d2.get_mouse_position(), camera);
+                        let new_pos = Point(new_pos.x as f64, -new_pos.y as f64);
+
+                        let new_value = match (index, points) {
+                            (Some(index), Points::Many(mut points)) => {
+                                let index = index.get();
+                                points[index] = new_pos;
+                                Points::Many(points)
+                            }
+                            (None, Points::One(point)) => Points::One(new_pos),
+                            _ => unreachable!("Misaligned index and points"),
+                        };
+
+                        let pairs = match ident {
+                            DragIdent::Point(id) => vec![(id, VarValue::from(new_value))],
+                            DragIdent::XY { x, y } => {
+                                let (vx, vy) = new_value.to_coords();
+                                vec![(x, VarValue::from(vx)), (y, VarValue::from(vy))]
+                            }
+                        };
+
+                        Some(ActValue::new(pairs))
+                    }
+                    _ => None,
                 }
             };
             d.draw_fps(0, 0);

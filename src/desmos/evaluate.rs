@@ -327,7 +327,7 @@ impl Evaluable for EvalTree {
                             VarValue::Prim(list.get_cloned((x.floor() as usize).wrapping_sub(1)))
                         }
                         Computable::List(CompList::Number(xs)) => VarValue::List(
-                            xs.map_different(&POOL_PRIMITIVE, |v| {
+                            xs.map_dif(&POOL_PRIMITIVE, |v| {
                                 let one_index = v.floor() as usize;
                                 list.get_cloned(one_index.wrapping_sub(1))
                             })

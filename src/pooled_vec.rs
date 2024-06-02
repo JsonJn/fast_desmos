@@ -268,9 +268,7 @@ impl<T: Clone> PooledVec<T> {
     pub fn pooled_to_vec(self) -> Vec<T> {
         ManuallyDrop::into_inner(self.vec.clone())
     }
-}
 
-impl<T: Default> PooledVec<T> {
     pub fn zip_map_different<B: Default, C>(
         pool: &'static VecPool<C>,
         mut a: PooledVec<T>,
@@ -279,25 +277,18 @@ impl<T: Default> PooledVec<T> {
     ) -> PooledVec<C> {
         let len = cmp::min(a.len(), b.len());
         let mut result = PooledVec::new_derived_id(pool, a.internal_id.id);
-        result.reserve(len);
-        for i in 0..len {
-            let a_at = a.get_mut(i).unwrap();
-            let b_at = b.get_mut(i).unwrap();
-            let (a, b) = (mem::take(a_at), mem::take(b_at));
-            result.push(f(a, b));
-        }
-        // All elements in `self` are now `mem::zeroed()`
 
-        unsafe {
-            // SAFETY: Setting to 0 has no safety concerns
-            a.set_len(0);
-            b.set_len(0);
+        let zipped = a.drain(..).zip(b.drain(..));
+
+        result.reserve(len);
+        for (a, b) in zipped {
+            result.push(f(a, b));
         }
 
         result
     }
 
-    pub fn map_different<U>(
+    pub fn map_dif<U>(
         mut self,
         new_pool: &'static VecPool<U>,
         mut f: impl FnMut(T) -> U,
@@ -305,9 +296,21 @@ impl<T: Default> PooledVec<T> {
         let len = self.len();
         let mut result = PooledVec::new_derived_id(new_pool, self.internal_id.id);
         result.reserve(len);
-        for i in 0..len {
-            let at = self.get_mut(i).unwrap();
-            let at = mem::take(at);
+        for at in self.drain(..) {
+            result.push(f(at));
+        }
+        result
+    }
+
+    pub fn iter_map_dif<U>(
+        &self,
+        new_pool: &'static VecPool<U>,
+        mut f: impl FnMut(&T) -> U,
+    ) -> PooledVec<U> {
+        let len = self.len();
+        let mut result = PooledVec::new_derived_id(new_pool, self.internal_id.id);
+        result.reserve(len);
+        for at in self.iter() {
             result.push(f(at));
         }
         result

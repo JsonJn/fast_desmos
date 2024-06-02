@@ -514,7 +514,7 @@ impl Builtins {
                         (0..keys.len()).zip(keys.iter().copied()),
                     );
                     ind_keys.sort_by(|&(_, a), (_, b)| a.partial_cmp(b).unwrap());
-                    let ind = ind_keys.map_different(&POOL_INDICES, |i| i.0);
+                    let ind = ind_keys.map_dif(&POOL_INDICES, |i| i.0);
 
                     VarValue::List(param.select(ind))
                 }
@@ -707,9 +707,7 @@ impl From<CondOutput> for Computable {
     fn from(value: CondOutput) -> Self {
         match value {
             CondOutput::Prim(b) => Self::number(to_f64(b)),
-            CondOutput::List(bs) => {
-                Self::List(CompList::Number(bs.map_different(&POOL_NUMBER, to_f64)))
-            }
+            CondOutput::List(bs) => Self::List(CompList::Number(bs.map_dif(&POOL_NUMBER, to_f64))),
         }
     }
 }
@@ -718,7 +716,7 @@ impl From<CondOutput> for VarValue {
     fn from(value: CondOutput) -> Self {
         match value {
             CondOutput::Prim(b) => Self::number(to_f64(b)),
-            CondOutput::List(bs) => Self::num_list(bs.map_different(&POOL_NUMBER, to_f64)),
+            CondOutput::List(bs) => Self::num_list(bs.map_dif(&POOL_NUMBER, to_f64)),
         }
     }
 }

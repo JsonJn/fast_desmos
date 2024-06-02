@@ -1,7 +1,7 @@
 use super::super::list::CompList;
 use super::super::primitive::CompPrim;
 use super::Computable;
-use crate::desmos::evaluate::{POOL_POINT};
+use crate::desmos::evaluate::POOL_POINT;
 use crate::pooled_vec::PooledVec;
 use std::ops::Div;
 
@@ -80,7 +80,7 @@ impl Div<CompList> for CompPrim {
         match (self, rhs) {
             (Self::Number(x), rhs) => x / rhs,
             (Self::Point(p), CompList::Number(xs)) => {
-                CompList::Point(xs.map_different(&POOL_POINT, |x| p / x))
+                CompList::Point(xs.map_dif(&POOL_POINT, |x| p / x))
             }
             (Self::Point(_), CompList::Point(_)) => unreachable!("Cannot divide point by point"),
         }

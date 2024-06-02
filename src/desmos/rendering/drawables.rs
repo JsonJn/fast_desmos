@@ -7,7 +7,9 @@ pub use drawable_list::DrawableList;
 use crate::desmos::evaluate::{
     Color, EvalExpr, EvalKind, EvalTree, Ident, Point, Points, Polygons, UserIdent, IDENTIFIERS,
 };
+use crate::desmos::execute::DragIdent;
 use crate::desmos::{parsing, Clickable};
+use crate::pooled_vec::Id;
 
 mod drawable_list;
 
@@ -197,7 +199,7 @@ impl Default for DrawColor {
 
 #[derive(Debug, Clone)]
 pub struct Drawable<'a> {
-    pub draw_index: usize,
+    pub id: Id,
     pub color: &'a DrawColor,
     pub clickable: Option<&'a Clickable>,
     pub kind: DrawableType<'a>,
@@ -269,6 +271,7 @@ impl ExplicitType {
 #[derive(Debug, Clone)]
 pub struct DrawPoints<'a> {
     pub points: Points,
+    pub draggable: Option<DragIdent>,
     pub point_options: Option<&'a PointOptions>,
     pub line_options: Option<&'a LineOptions>,
 }

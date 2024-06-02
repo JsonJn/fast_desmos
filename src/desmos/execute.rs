@@ -18,6 +18,7 @@ use crate::desmos::rendering::drawables::{
     ExplicitType, ParametricDomain, ParametricEq, DOMAIN_DEFAULT,
 };
 use crate::desmos::{parsing, Clickable, DesmosCell, Options};
+use crate::pooled_vec::Id;
 
 pub mod actions;
 mod dependency;
@@ -53,7 +54,13 @@ impl From<Vec<usize>> for SpecialDeps<'_> {
 
 #[derive(Debug, Clone, Default)]
 pub struct Constant<'a> {
-    drawable: RefCell<Option<Drawable<'a>>>,
+    drawable: RefCell<Option<(usize, Drawable<'a>)>>,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum DragIdent {
+    Point(UserIdent),
+    XY { x: UserIdent, y: UserIdent },
 }
 
 #[derive(Debug)]
@@ -61,6 +68,7 @@ pub struct Statement<'a> {
     ident: Option<UserIdent>,
     expr: EvalExpr,
     deps: SpecialDeps<'a>,
+    drag_mode: Option<DragIdent>,
     drawable_options: DrawableOptions,
 }
 
@@ -70,11 +78,43 @@ impl Statement<'_> {
         expr: EvalExpr,
         drawable_options: DrawableOptions,
     ) -> Self {
+        let drag_mode = drawable_options.options.drag_mode.map(|x| x.drag);
+        //FIXME: I hate this too
+        let drag_mode = match drag_mode {
+            should_be @ (None | Some(true)) => {
+                let should_be = should_be.is_some();
+                let result = (|| {
+                    if let EvalKind::Point { x, y } = &expr.expr.kind {
+                        match (&x.expr.kind, &y.expr.kind) {
+                            (EvalKind::Number(_), EvalKind::Number(_)) => {
+                                if let Some(id) = ident {
+                                    return Some(DragIdent::Point(id));
+                                }
+                            }
+                            (&EvalKind::Ident(x), &EvalKind::Ident(y)) => {
+                                return Some(DragIdent::XY { x, y })
+                            }
+                            _ => {}
+                        }
+                    }
+                    None
+                })();
+
+                if should_be && result.is_none() {
+                    unreachable!("Undraggable point cannot be dragged.")
+                }
+
+                result
+            }
+            Some(false) => None,
+        };
+
         Self {
             ident,
             deps: expr.get_deps().into(),
             expr,
             drawable_options,
+            drag_mode,
         }
     }
 }
@@ -95,9 +135,11 @@ pub struct ActStatement {
 }
 
 fn vv_to_drawable<'a>(
+    draggable: Option<DragIdent>,
+    id: Id,
     value: &VarValue,
     drawable_options: &'a DrawableOptions,
-) -> Option<Drawable<'a>> {
+) -> Option<(usize, Drawable<'a>)> {
     let DrawableOptions {
         options:
             Options {
@@ -105,9 +147,7 @@ fn vv_to_drawable<'a>(
                 line_options,
                 fill_options,
                 point_options,
-                point_on_off: points,
-                line_on_off: lines,
-                fill_on_off: fills,
+                drag_mode: _,
             },
         draw_index,
         draw_color: color,
@@ -119,46 +159,60 @@ fn vv_to_drawable<'a>(
 
     if !hidden {
         Some(match value {
-            VarValue::Prim(Primitive::Computable(CompPrim::Point(point))) => Drawable {
+            VarValue::Prim(Primitive::Computable(CompPrim::Point(point))) => (
                 draw_index,
-                color,
-                kind: DrawableType::Points(DrawPoints {
-                    points: Points::One(*point),
-                    line_options: lines.on_then(line_options),
-                    point_options: points.on_or_default_then(point_options),
-                }),
-                clickable,
-            },
-            VarValue::Prim(Primitive::NonComputable(NonCompPrim::Polygon(polygon))) => Drawable {
+                Drawable {
+                    id,
+                    color,
+                    kind: DrawableType::Points(DrawPoints {
+                        points: Points::One(*point),
+                        line_options: line_options.as_ref().on(),
+                        point_options: point_options.as_ref().on_or_default(),
+                        draggable,
+                    }),
+                    clickable,
+                },
+            ),
+            VarValue::Prim(Primitive::NonComputable(NonCompPrim::Polygon(polygon))) => (
                 draw_index,
-                color,
-                kind: DrawableType::Polygons(DrawPolygons {
-                    polygons: Polygons::One(polygon.clone()),
-                    line_options: lines.on_or_default_then(line_options),
-                    fill_options: fills.on_or_default_then(fill_options),
-                }),
-                clickable,
-            },
-            VarValue::List(PrimList::Computable(CompList::Point(ps))) => Drawable {
+                Drawable {
+                    color,
+                    id,
+                    kind: DrawableType::Polygons(DrawPolygons {
+                        polygons: Polygons::One(polygon.clone()),
+                        line_options: line_options.as_ref().on_or_default(),
+                        fill_options: fill_options.as_ref().on_or_default(),
+                    }),
+                    clickable,
+                },
+            ),
+            VarValue::List(PrimList::Computable(CompList::Point(ps))) => (
                 draw_index,
-                color,
-                kind: DrawableType::Points(DrawPoints {
-                    points: Points::Many(ps.clone()),
-                    line_options: lines.on_then(line_options),
-                    point_options: points.on_or_default_then(point_options),
-                }),
-                clickable,
-            },
-            VarValue::List(PrimList::NonComputable(NonCompList::Polygon(polys))) => Drawable {
+                Drawable {
+                    id,
+                    color,
+                    kind: DrawableType::Points(DrawPoints {
+                        points: Points::Many(ps.clone()),
+                        line_options: line_options.as_ref().on(),
+                        point_options: point_options.as_ref().on_or_default(),
+                        draggable,
+                    }),
+                    clickable,
+                },
+            ),
+            VarValue::List(PrimList::NonComputable(NonCompList::Polygon(polys))) => (
                 draw_index,
-                color,
-                kind: DrawableType::Polygons(DrawPolygons {
-                    polygons: Polygons::Many(polys.clone()),
-                    line_options: lines.on_or_default_then(line_options),
-                    fill_options: fills.on_or_default_then(fill_options),
-                }),
-                clickable,
-            },
+                Drawable {
+                    id,
+                    color,
+                    kind: DrawableType::Polygons(DrawPolygons {
+                        polygons: Polygons::Many(polys.clone()),
+                        line_options: line_options.as_ref().on_or_default(),
+                        fill_options: fill_options.as_ref().on_or_default(),
+                    }),
+                    clickable,
+                },
+            ),
             _ => return None,
         })
     } else {
@@ -171,12 +225,13 @@ impl Statement<'_> {
         &'a self,
         functions: &Functions,
         context: &mut ValueContext,
-    ) -> Option<Drawable<'a>> {
+    ) -> Option<(usize, Drawable<'a>)> {
         let Statement {
             ident,
             expr,
             deps,
             drawable_options,
+            drag_mode,
         } = self;
         let DrawableOptions {
             options,
@@ -185,8 +240,9 @@ impl Statement<'_> {
             domain,
             draw_color: color,
         } = drawable_options;
-        let (draw_index, ident) = (*draw_index, *ident);
+        let (draw_index, ident, drag_mode) = (*draw_index, *ident, *drag_mode);
         let clickable = clickable.as_ref();
+        let id = expr.expr.id;
 
         match deps {
             SpecialDeps::Constant(con) => {
@@ -194,7 +250,7 @@ impl Statement<'_> {
 
                 let drawable = if con.is_none() {
                     let value = expr.evaluate(functions, context);
-                    let drawable = vv_to_drawable(&value, drawable_options);
+                    let drawable = vv_to_drawable(drag_mode, id, &value, drawable_options);
                     if let Some(ident) = ident {
                         let _ = context.set_value(ident, value.clone());
                     }
@@ -206,7 +262,7 @@ impl Statement<'_> {
             }
             SpecialDeps::None => {
                 let value = expr.evaluate(functions, context);
-                let drawable = vv_to_drawable(&value, drawable_options);
+                let drawable = vv_to_drawable(drag_mode, id, &value, drawable_options);
                 if let Some(id) = ident {
                     let _ = context.set_value(id, value.clone());
                 }
@@ -215,24 +271,25 @@ impl Statement<'_> {
             SpecialDeps::ExplicitX => {
                 if matches!(ident, Some(IdentifierStorer::IDENT_Y) | None) {
                     if !options.hidden {
-                        Some(Drawable {
+                        Some((
                             draw_index,
-                            color,
-                            kind: DrawableType::Explicit(ExplicitEq {
-                                kind: ExplicitType::YFromX,
-                                line_options: options
-                                    .line_on_off
-                                    .on_or_default_then(&options.line_options),
-                                equation: expr,
-                            }),
-                            clickable,
-                        })
+                            Drawable {
+                                id,
+                                color,
+                                kind: DrawableType::Explicit(ExplicitEq {
+                                    kind: ExplicitType::YFromX,
+                                    line_options: options.line_options.as_ref().on_or_default(),
+                                    equation: expr,
+                                }),
+                                clickable,
+                            },
+                        ))
                     } else {
                         None
                     }
                 } else {
                     let value = expr.evaluate(functions, context);
-                    let drawable = vv_to_drawable(&value, drawable_options);
+                    let drawable = vv_to_drawable(drag_mode, id, &value, drawable_options);
                     if let Some(id) = ident {
                         let _ = context.set_value(id, value.clone());
                     }
@@ -242,24 +299,25 @@ impl Statement<'_> {
             SpecialDeps::ExplicitY => {
                 if matches!(ident, Some(IdentifierStorer::IDENT_X)) {
                     if !options.hidden {
-                        Some(Drawable {
+                        Some((
                             draw_index,
-                            color,
-                            kind: DrawableType::Explicit(ExplicitEq {
-                                kind: ExplicitType::XFromY,
-                                line_options: options
-                                    .line_on_off
-                                    .on_or_default_then(&options.line_options),
-                                equation: expr,
-                            }),
-                            clickable,
-                        })
+                            Drawable {
+                                id,
+                                color,
+                                kind: DrawableType::Explicit(ExplicitEq {
+                                    kind: ExplicitType::XFromY,
+                                    line_options: options.line_options.as_ref().on_or_default(),
+                                    equation: expr,
+                                }),
+                                clickable,
+                            },
+                        ))
                     } else {
                         None
                     }
                 } else {
                     let value = expr.evaluate(functions, context);
-                    let drawable = vv_to_drawable(&value, drawable_options);
+                    let drawable = vv_to_drawable(drag_mode, id, &value, drawable_options);
                     if let Some(id) = ident {
                         let _ = context.set_value(id, value.clone());
                     }
@@ -269,24 +327,25 @@ impl Statement<'_> {
             SpecialDeps::Parametric => {
                 if context.is_initialized(IdentifierStorer::IDENT_T) {
                     let value = expr.evaluate(functions, context);
-                    let drawable = vv_to_drawable(&value, drawable_options);
+                    let drawable = vv_to_drawable(drag_mode, id, &value, drawable_options);
                     if let Some(id) = ident {
                         let _ = context.set_value(id, value.clone());
                     }
                     drawable
                 } else if !options.hidden {
-                    Some(Drawable {
+                    Some((
                         draw_index,
-                        color,
-                        kind: DrawableType::Parametric(ParametricEq {
-                            equation: expr,
-                            line_options: options
-                                .line_on_off
-                                .on_or_default_then(&options.line_options),
-                            domain: domain.as_ref().unwrap_or_else(|| &DOMAIN_DEFAULT),
-                        }),
-                        clickable,
-                    })
+                        Drawable {
+                            id,
+                            color,
+                            kind: DrawableType::Parametric(ParametricEq {
+                                equation: expr,
+                                line_options: options.line_options.as_ref().on_or_default(),
+                                domain: domain.as_ref().unwrap_or_else(|| &DOMAIN_DEFAULT),
+                            }),
+                            clickable,
+                        },
+                    ))
                 } else {
                     None
                 }
@@ -305,7 +364,10 @@ impl Statements<'_> {
         let mut drawables = DrawableList::new();
 
         for stmt in &self.statements {
-            drawables.insert_option(stmt.execute(&context.functions, &mut context.context));
+            let draw = stmt.execute(&context.functions, &mut context.context);
+            if let Some((index, drawable)) = draw {
+                drawables.insert(index, drawable);
+            }
         }
 
         for act_stmt in &self.act_statements {

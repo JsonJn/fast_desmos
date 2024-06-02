@@ -1,6 +1,6 @@
 use crate::desmos::evaluate::{
     Color, CompList, CompPrim, NonCompList, NonCompPrim, Point, Polygon, PrimList, Primitive,
-    VarValue,
+    VarValue, POOL_NUMBER,
 };
 use crate::iterator::{OptIntoIter, OptIntoIterRep, OptIter, OptIterRep, OptWindowIter};
 use crate::pooled_vec::PooledVec;
@@ -9,8 +9,8 @@ macro_rules! listable_def {
     (
         $(
         $name:ident<$ty:ty> {
-            One($x:ident) from $one:pat,
-            Many($y:ident) from $many:pat,
+            One($x:ident) from $one:tt,
+            Many($y:ident) from $many:tt,
         }
         )*
     ) => {
@@ -21,15 +21,16 @@ macro_rules! listable_def {
             Many(PooledVec<$ty>),
         }
 
+        #[allow(dead_code)]
         impl $name {
             pub fn is_one(&self) -> bool {
                 matches!(self, Self::One(_))
             }
+
             pub fn is_many(&self) -> bool {
                 matches!(self, Self::Many(_))
             }
 
-            #[allow(dead_code)]
             pub fn into_iter(self) -> OptIntoIter<$ty> {
                 match self {
                     Self::One(x) => OptIntoIter::One(Some(x)),
@@ -37,7 +38,6 @@ macro_rules! listable_def {
                 }
             }
 
-            #[allow(dead_code)]
             pub fn into_iter_rep(self) -> OptIntoIterRep<$ty> {
                 match self {
                     Self::One(x) => OptIntoIterRep::One(x),
@@ -45,7 +45,6 @@ macro_rules! listable_def {
                 }
             }
 
-            #[allow(dead_code)]
             pub fn iter(&self) -> OptIter<$ty> {
                 match self {
                     Self::One(x) => OptIter::One(Some(x)),
@@ -53,7 +52,6 @@ macro_rules! listable_def {
                 }
             }
 
-            #[allow(dead_code)]
             pub fn iter_rep(&self) -> OptIterRep<$ty> {
                 match self {
                     Self::One(x) => OptIterRep::One(x),
@@ -61,7 +59,6 @@ macro_rules! listable_def {
                 }
             }
 
-            #[allow(dead_code)]
             pub fn first(self) -> $ty {
                 match self {
                     Self::One(x) => x,
@@ -69,7 +66,6 @@ macro_rules! listable_def {
                 }
             }
 
-            #[allow(dead_code)]
             pub fn windows(&self, size: usize) -> OptWindowIter<$ty> {
                 assert_ne!(size, 1, "Doesn't work with size 1");
 
@@ -86,10 +82,21 @@ macro_rules! listable_def {
             type Error = VarValue;
 
             fn try_from(value: VarValue) -> Result<Self, Self::Error> {
+                #[allow(unused_parens)]
                 match value {
                     $one => Ok(Self::One($x)),
                     $many => Ok(Self::Many($y)),
                     a => Err(a),
+                }
+            }
+        }
+
+        impl From<$name> for VarValue {
+            fn from(value: $name) -> Self {
+                #[allow(unused_parens)]
+                match value {
+                    $name::One($x) => $one,
+                    $name::Many($y) => $many,
                 }
             }
         }
@@ -99,22 +106,34 @@ macro_rules! listable_def {
 
 listable_def! {
     Points<Point> {
-        One(x) from VarValue::Prim(Primitive::Computable(CompPrim::Point(x))),
-        Many(x) from VarValue::List(PrimList::Computable(CompList::Point(x))),
+        One(x) from (VarValue::Prim(Primitive::Computable(CompPrim::Point(x)))),
+        Many(x) from (VarValue::List(PrimList::Computable(CompList::Point(x)))),
     }
 
     Numbers<f64> {
-        One(x) from VarValue::Prim(Primitive::Computable(CompPrim::Number(x))),
-        Many(x) from VarValue::List(PrimList::Computable(CompList::Number(x))),
+        One(x) from (VarValue::Prim(Primitive::Computable(CompPrim::Number(x)))),
+        Many(x) from (VarValue::List(PrimList::Computable(CompList::Number(x)))),
     }
 
     Colors<Color> {
-        One(x) from VarValue::Prim(Primitive::NonComputable(NonCompPrim::Color(x))),
-        Many(x) from VarValue::List(PrimList::NonComputable(NonCompList::Color(x))),
+        One(x) from (VarValue::Prim(Primitive::NonComputable(NonCompPrim::Color(x)))),
+        Many(x) from (VarValue::List(PrimList::NonComputable(NonCompList::Color(x)))),
     }
 
     Polygons<Polygon> {
-        One(x) from VarValue::Prim(Primitive::NonComputable(NonCompPrim::Polygon(x))),
-        Many(x) from VarValue::List(PrimList::NonComputable(NonCompList::Polygon(x))),
+        One(x) from (VarValue::Prim(Primitive::NonComputable(NonCompPrim::Polygon(x)))),
+        Many(x) from (VarValue::List(PrimList::NonComputable(NonCompList::Polygon(x)))),
+    }
+}
+
+impl Points {
+    pub fn to_coords(self) -> (Numbers, Numbers) {
+        match self {
+            Points::One(p) => (Numbers::One(p.0), Numbers::One(p.1)),
+            Points::Many(ps) => (
+                Numbers::Many(ps.iter_map_dif(&POOL_NUMBER, |x| x.0)),
+                Numbers::Many(ps.map_dif(&POOL_NUMBER, |x| x.1)),
+            ),
+        }
     }
 }

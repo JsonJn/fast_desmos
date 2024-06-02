@@ -1,6 +1,5 @@
-
 use std::iter::Sum;
-use std::ops::{Add, Div, Mul, Neg, Sub};
+use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub};
 
 #[derive(Debug, Copy, Clone, PartialEq, Default)]
 pub struct Point(pub f64, pub f64);
@@ -35,11 +34,18 @@ impl Mul<f64> for Point {
     }
 }
 
-impl Add<Point> for Point {
+impl Add for Point {
     type Output = Point;
 
     fn add(self, rhs: Point) -> Self::Output {
         Point(self.0 + rhs.0, self.1 + rhs.1)
+    }
+}
+
+impl AddAssign for Point {
+    fn add_assign(&mut self, rhs: Self) {
+        self.0 += rhs.0;
+        self.1 += rhs.1;
     }
 }
 

@@ -54,7 +54,7 @@ fn main() {
         FLICKERING_POINTS = "https://www.desmos.com/calculator/xbebofu2lk";
     }
 
-    let desmos = DesmosPage::from_url(TIC_TAC_TOE).unwrap();
+    let desmos = DesmosPage::from_url(VECTOR_FIELD).unwrap();
     desmos::rendering::window(desmos);
 
     // println!("{:?}", size_of::<EvalTree>());

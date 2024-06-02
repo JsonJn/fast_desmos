@@ -36,7 +36,7 @@ impl Mul<CompPrim> for CompList {
         match self {
             Self::Number(n) => match rhs {
                 CompPrim::Number(x) => Self::Number(n.map_same(|v| v * x)),
-                CompPrim::Point(p) => Self::Point(n.map_different(&POOL_POINT, |v| p * v)),
+                CompPrim::Point(p) => Self::Point(n.map_dif(&POOL_POINT, |v| p * v)),
             },
             Self::Point(p) => match rhs {
                 CompPrim::Number(x) => Self::Point(p.map_same(|v| v * x)),

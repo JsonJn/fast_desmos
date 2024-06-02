@@ -28,20 +28,18 @@ impl PrimList {
 
     pub fn to_list(self) -> PooledVec<Primitive> {
         match self {
-            PrimList::Computable(CompList::Point(p)) => p.map_different(&POOL_PRIMITIVE, |v| {
+            PrimList::Computable(CompList::Point(p)) => p.map_dif(&POOL_PRIMITIVE, |v| {
                 Primitive::Computable(CompPrim::Point(v))
             }),
-            PrimList::Computable(CompList::Number(p)) => p.map_different(&POOL_PRIMITIVE, |v| {
+            PrimList::Computable(CompList::Number(p)) => p.map_dif(&POOL_PRIMITIVE, |v| {
                 Primitive::Computable(CompPrim::Number(v))
             }),
-            PrimList::NonComputable(NonCompList::Polygon(p)) => p
-                .map_different(&POOL_PRIMITIVE, |v| {
-                    Primitive::NonComputable(NonCompPrim::Polygon(v))
-                }),
-            PrimList::NonComputable(NonCompList::Color(p)) => p
-                .map_different(&POOL_PRIMITIVE, |v| {
-                    Primitive::NonComputable(NonCompPrim::Color(v))
-                }),
+            PrimList::NonComputable(NonCompList::Polygon(p)) => p.map_dif(&POOL_PRIMITIVE, |v| {
+                Primitive::NonComputable(NonCompPrim::Polygon(v))
+            }),
+            PrimList::NonComputable(NonCompList::Color(p)) => p.map_dif(&POOL_PRIMITIVE, |v| {
+                Primitive::NonComputable(NonCompPrim::Color(v))
+            }),
         }
     }
 
@@ -53,7 +51,7 @@ impl PrimList {
     }
 
     pub fn from_vec(vec: PooledVec<VarValue>) -> Self {
-        Self::from_vec_prim(vec.map_different(
+        Self::from_vec_prim(vec.map_dif(
             &POOL_PRIMITIVE,
             |v| take_pat!(v => x from VarValue::Prim(x), "No nested lists!"),
         ))
@@ -63,32 +61,32 @@ impl PrimList {
         if let Some(first) = vec.first() {
             match first {
                 Primitive::Computable(CompPrim::Point(_)) => {
-                    PrimList::Computable(CompList::Point(vec.map_different(
+                    PrimList::Computable(CompList::Point(vec.map_dif(
                         &POOL_POINT,
                         |v| take_pat!(v => x from Primitive::Computable(CompPrim::Point(x)), "Non homogeneous list"),
                     )))
                 }
                 Primitive::Computable(CompPrim::Number(_)) => {
-                    PrimList::Computable(CompList::Number(vec.map_different(
+                    PrimList::Computable(CompList::Number(vec.map_dif(
                         &POOL_NUMBER,
                         |v| take_pat!(v => x from Primitive::Computable(CompPrim::Number(x)), "Non homogeneous list"),
                     )))
                 }
                 Primitive::NonComputable(NonCompPrim::Color(_)) => {
-                    PrimList::NonComputable(NonCompList::Color(vec.map_different(
+                    PrimList::NonComputable(NonCompList::Color(vec.map_dif(
                         &POOL_COLOR,
                         |v| take_pat!(v => x from Primitive::NonComputable(NonCompPrim::Color(x)), "Non homogeneous list"),
                     )))
                 }
                 Primitive::NonComputable(NonCompPrim::Polygon(_)) => {
-                    PrimList::NonComputable(NonCompList::Polygon(vec.map_different(
+                    PrimList::NonComputable(NonCompList::Polygon(vec.map_dif(
                         &POOL_POLYGON,
                         |v| take_pat!(v => x from Primitive::NonComputable(NonCompPrim::Polygon(x)), "Non homogeneous list"),
                     )))
                 }
             }
         } else {
-            PrimList::Computable(CompList::Number(vec.map_different(&POOL_NUMBER, |_| {
+            PrimList::Computable(CompList::Number(vec.map_dif(&POOL_NUMBER, |_| {
                 unreachable!("Empty list, this will never be called")
             })))
         }
@@ -185,10 +183,8 @@ impl CompList {
 
     pub fn select(self, indices: PooledVec<usize>) -> Self {
         match self {
-            CompList::Number(ns) => {
-                CompList::Number(indices.map_different(&POOL_NUMBER, |i| ns[i]))
-            }
-            CompList::Point(ps) => CompList::Point(indices.map_different(&POOL_POINT, |i| ps[i])),
+            CompList::Number(ns) => CompList::Number(indices.map_dif(&POOL_NUMBER, |i| ns[i])),
+            CompList::Point(ps) => CompList::Point(indices.map_dif(&POOL_POINT, |i| ps[i])),
         }
     }
 
@@ -237,11 +233,9 @@ impl NonCompList {
 
     pub fn select(self, indices: PooledVec<usize>) -> Self {
         match self {
-            NonCompList::Color(cs) => {
-                NonCompList::Color(indices.map_different(&POOL_COLOR, |i| cs[i]))
-            }
+            NonCompList::Color(cs) => NonCompList::Color(indices.map_dif(&POOL_COLOR, |i| cs[i])),
             NonCompList::Polygon(ps) => {
-                NonCompList::Polygon(indices.map_different(&POOL_POLYGON, |i| ps[i].clone()))
+                NonCompList::Polygon(indices.map_dif(&POOL_POLYGON, |i| ps[i].clone()))
             }
         }
     }

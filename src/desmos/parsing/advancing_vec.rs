@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::cell::Cell;
 use std::fmt::{Debug, Display, Formatter};
 use std::ptr::addr_of;

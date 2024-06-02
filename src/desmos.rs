@@ -19,6 +19,33 @@ use crate::desmos::rendering::drawables::{
     DrawColor, FillOptions, Label, LineOptions, ParametricDomain, PointOptions,
 };
 
+pub struct OnOff<T> {
+    state: OnOffState,
+    data: T,
+}
+
+mod sealed {
+    use super::*;
+    use std::fmt::{Debug, Formatter};
+
+    #[allow(dead_code)]
+    #[derive(Debug)]
+    struct OnOffDebug<'a, T: Debug> {
+        state: &'a OnOffState,
+        data: &'a T,
+    }
+
+    impl<T: Debug> Debug for OnOff<T> {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            OnOffDebug {
+                state: &self.state,
+                data: &self.data,
+            }
+            .fmt(f)
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone, Default)]
 pub enum OnOffState {
     #[default]
@@ -27,31 +54,40 @@ pub enum OnOffState {
     Off,
 }
 
-impl OnOffState {
-    pub fn on_then<R>(self, value: R) -> Option<R> {
-        match self {
-            Self::On => Some(value),
+#[allow(dead_code)]
+impl<T> OnOff<T> {
+    pub fn new(state: OnOffState, data: T) -> Self {
+        Self { state, data }
+    }
+
+    pub fn as_ref(&self) -> OnOff<&T> {
+        OnOff::new(self.state, &self.data)
+    }
+
+    pub fn on(self) -> Option<T> {
+        match self.state {
+            OnOffState::On => Some(self.data),
             _ => None,
         }
     }
 
-    pub fn off_then<R>(self, value: R) -> Option<R> {
-        match self {
-            Self::Off => Some(value),
+    pub fn off(self) -> Option<T> {
+        match self.state {
+            OnOffState::Off => Some(self.data),
             _ => None,
         }
     }
 
-    pub fn on_or_default_then<R>(self, value: R) -> Option<R> {
-        match self {
-            Self::On | Self::Default => Some(value),
+    pub fn on_or_default(self) -> Option<T> {
+        match self.state {
+            OnOffState::On | OnOffState::Default => Some(self.data),
             _ => None,
         }
     }
 
-    pub fn off_or_default_then<R>(self, value: R) -> Option<R> {
-        match self {
-            Self::Off | Self::Default => Some(value),
+    pub fn off_or_default(self) -> Option<T> {
+        match self.state {
+            OnOffState::Off | OnOffState::Default => Some(self.data),
             _ => None,
         }
     }
@@ -114,6 +150,11 @@ impl Drop for WebCache {
     }
 }
 
+#[derive(Default, Debug, Copy, Clone)]
+pub struct StoredDragMode {
+    drag: bool,
+}
+
 #[derive(Debug)]
 pub struct DesmosCell {
     pub statement: Statement,
@@ -126,12 +167,10 @@ pub struct DesmosCell {
 #[derive(Debug)]
 pub struct Options {
     pub hidden: bool,
-    pub point_on_off: OnOffState,
-    pub point_options: PointOptions,
-    pub line_on_off: OnOffState,
-    pub line_options: LineOptions,
-    pub fill_on_off: OnOffState,
-    pub fill_options: FillOptions,
+    pub point_options: OnOff<PointOptions>,
+    pub line_options: OnOff<LineOptions>,
+    pub fill_options: OnOff<FillOptions>,
+    pub drag_mode: Option<StoredDragMode>,
 }
 
 #[derive(Debug)]
@@ -307,6 +346,7 @@ impl DesmosPage {
 
                         PointOptions::from_options(diameter, opacity, label, None)
                     };
+                    let point_options = OnOff::new(point_on_off, point_options);
 
                     // Line options
                     let line_on_off = expr.get("lines").map(|v| v.as_bool().unwrap()).into();
@@ -316,6 +356,7 @@ impl DesmosPage {
                         let thickness = expr.get("lineWidth").map(parse_expr_v);
                         LineOptions::from_options(thickness, opacity, None)
                     };
+                    let line_options = OnOff::new(line_on_off, line_options);
 
                     // Fill options
                     let fill_on_off = expr.get("fill").map(|v| v.as_bool().unwrap()).into();
@@ -323,6 +364,7 @@ impl DesmosPage {
                         let opacity = expr.get("fillOpacity").map(parse_expr_v);
                         FillOptions::from_options(opacity)
                     };
+                    let fill_options = OnOff::new(fill_on_off, fill_options);
 
                     // Parametric Domain
                     let domain = expr.get("parametricDomain").map(|v| {
@@ -341,6 +383,17 @@ impl DesmosPage {
                         expr: parse_act_expr(v.as_object().unwrap().get("latex").unwrap()),
                     });
 
+                    // Drag Mode
+                    let drag_mode = expr.get("dragMode").map(|v| {
+                        let name = v.as_str().unwrap();
+                        match name {
+                            "NONE" => StoredDragMode { drag: false },
+                            "X" | "Y" => unreachable!("Axial drag modes not supported yet."),
+                            "XY" => StoredDragMode { drag: true },
+                            _what => unreachable!("Unknown drag mode: {_what:?}"),
+                        }
+                    });
+
                     Some(DesmosCell {
                         statement,
                         draw_color,
@@ -349,9 +402,7 @@ impl DesmosPage {
                             point_options,
                             line_options,
                             fill_options,
-                            point_on_off,
-                            line_on_off,
-                            fill_on_off,
+                            drag_mode,
                         },
                         domain,
                         clickable,

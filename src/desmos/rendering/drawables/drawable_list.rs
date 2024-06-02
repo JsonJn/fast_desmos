@@ -11,8 +11,8 @@ impl<'a> DrawableList<'a> {
         Self::default()
     }
 
-    pub fn insert(&mut self, drawable: Drawable<'a>) {
-        let draw_index = drawable.draw_index;
+    pub fn insert(&mut self, index: usize, drawable: Drawable<'a>) {
+        let draw_index = index;
         let index = self
             .indices
             .iter()
@@ -20,12 +20,6 @@ impl<'a> DrawableList<'a> {
             .unwrap_or(self.indices.len());
         self.indices.insert(index, draw_index);
         self.drawables.insert(index, drawable);
-    }
-
-    pub fn insert_option(&mut self, drawable: Option<Drawable<'a>>) {
-        if let Some(drawable) = drawable {
-            self.insert(drawable);
-        }
     }
 }
 
