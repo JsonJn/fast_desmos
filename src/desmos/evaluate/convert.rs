@@ -150,18 +150,9 @@ impl ToEval for EverythingElse {
             }),
             EverythingElse::IfElse(IfElse { cond, branches }) => {
                 let (yes, no) = if let Some(IfElseBranches { yes, no }) = branches {
-                    (
-                        yes.to_eval(),
-                        no.map_or_else(
-                            || EvalExpr::new_generated(EvalKind::Number(f64::NAN)),
-                            ToEval::to_eval,
-                        ),
-                    )
+                    (yes.to_eval(), no.map(ToEval::to_eval))
                 } else {
-                    (
-                        EvalExpr::new_generated(EvalKind::Number(1.0)),
-                        EvalExpr::new_generated(EvalKind::Number(f64::NAN)),
-                    )
+                    (EvalExpr::new_generated(EvalKind::Number(1.0)), None)
                 };
 
                 EvalExpr::new_generated(EvalKind::IfElse {

@@ -26,10 +26,25 @@ macro_rules! strings {
 
 fn main() {
     // use desmos::parsing::{Lexer, Parser};
-    // let raw = r#"F_{submit}=\left\{S_{top}>0:\left(S_{top}\to0,S_{bottom}\to0,C_{ells}\to L_{set}\left(C_{shifted},I_{addLoc},P_{layer}\right),P_{layer}\to3-P_{layer}\right)\right\}"#.to_string();
+    // let raw = r#"R_{x}=[0.000000,0.850651,0.850651,-0.850651,-0.850651,-0.525731,0.525731,0.525731,-0.525731,0.000000,0.000000,0.000000]"#.to_string();
     // let (lexed, left) = Lexer::lex(raw).unwrap();
     // let parsed = Parser::parse(lexed).unwrap();
     // println!("{parsed:#?}");
+    // return;
+
+    // use desmos::evaluate::{CanLinear, EvalKind, ToEval};
+    // use desmos::parsing::{Lexer, Parser, Statement};
+    // let raw = r#"\left(-3,4+4R\right)"#;
+    // let (lexed, _left) = Lexer::lex(raw.to_string()).unwrap();
+    // let parsed = Parser::parse(lexed).unwrap();
+    // let expr = take_pat!(parsed => x from Statement::Expression(x));
+    // let eval = expr.to_eval();
+    // let EvalKind::Point { x, y } = &eval.expr.kind else {
+    //     unreachable!("Test case isn't a point");
+    // };
+    // let [lin_x, lin_y] = [x, y].map(CanLinear::is_linear);
+    // println!("lin_x: {lin_x:?}");
+    // println!("lin_y: {lin_y:?}");
     // return;
 
     // let url = args();
@@ -53,6 +68,7 @@ fn main() {
         SPECIAL_CONNECT_4 = "https://www.desmos.com/calculator/2f5sqp3fok";
         FLICKERING_POINTS = "https://www.desmos.com/calculator/xbebofu2lk";
         BLINDMOKU = "https://www.desmos.com/calculator/w6dk818fbz";
+        D20 = "https://www.desmos.com/calculator/y0s6d3xy4t";
     }
 
     let desmos = DesmosPage::from_url(BLINDMOKU).unwrap();

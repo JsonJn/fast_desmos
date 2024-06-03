@@ -2,7 +2,10 @@ use std::cell::RefCell;
 use std::convert::identity;
 
 pub use crate::desmos::evaluate::CanDepend;
-use crate::desmos::evaluate::{reorder_inplace, topological_indices, topological_sort};
+use crate::desmos::evaluate::{
+    reorder_inplace, topological_indices, topological_sort, CanLinear, LinType, LinearFunc,
+    LinearVal,
+};
 use actions::{ActContext, ActEvaluable, ActExpr, ActFunction, ActIdent, ToActExpr, ACT_IDENTS};
 
 use crate::desmos::evaluate::{
@@ -18,6 +21,7 @@ use crate::desmos::rendering::drawables::{
 };
 use crate::desmos::{parsing, Clickable, DesmosCell, Options};
 use crate::pooled_vec::Id;
+use crate::take_pat;
 
 pub mod actions;
 
@@ -63,13 +67,13 @@ pub enum DragIdent {
         y: bool,
     },
     XY {
-        x: Option<UserIdent>,
-        y: Option<UserIdent>,
+        x: Option<LinearFunc>,
+        y: Option<LinearFunc>,
     },
 }
 
 impl DragIdent {
-    pub fn xy(x: Option<UserIdent>, y: Option<UserIdent>) -> Self {
+    pub fn xy(x: Option<LinearFunc>, y: Option<LinearFunc>) -> Self {
         Self::XY { x, y }
     }
 
@@ -97,14 +101,41 @@ impl Statement<'_> {
         drawable_options: DrawableOptions,
     ) -> Self {
         let drag_mode = drawable_options.options.drag_mode.map(|x| (x.x, x.y));
-        //FIXME: I hate this too
+
         let drag_mode = match drag_mode {
             Some((false, false)) => None,
             should_be @ (None | Some((_, _))) => {
                 let result = (|| {
                     if let EvalKind::Point { x, y } = &expr.expr.kind {
-                        match (&x.expr.kind, &y.expr.kind) {
-                            (EvalKind::Number(_), EvalKind::Number(_)) => {
+                        let [x_const, y_const] = [x, y].map(|expr| expr.is_linear());
+                        match (x_const, y_const) {
+                            (LinType::LinearIn(_), LinType::Constant) => {
+                                return Some(DragIdent::XY {
+                                    x: Some(
+                                        take_pat!(x.as_linear() => f from LinearVal::Linear(f)),
+                                    ),
+                                    y: None,
+                                });
+                            }
+                            (LinType::Constant, LinType::LinearIn(_)) => {
+                                return Some(DragIdent::XY {
+                                    x: None,
+                                    y: Some(
+                                        take_pat!(y.as_linear() => f from LinearVal::Linear(f)),
+                                    ),
+                                });
+                            }
+                            (LinType::LinearIn(_), LinType::LinearIn(_)) => {
+                                return Some(DragIdent::XY {
+                                    x: Some(
+                                        take_pat!(x.as_linear() => f from LinearVal::Linear(f)),
+                                    ),
+                                    y: Some(
+                                        take_pat!(y.as_linear() => f from LinearVal::Linear(f)),
+                                    ),
+                                })
+                            }
+                            (LinType::Constant, LinType::Constant) => {
                                 if let Some(ident) = ident {
                                     return Some(DragIdent::Point {
                                         ident,
@@ -113,11 +144,6 @@ impl Statement<'_> {
                                     });
                                 }
                             }
-                            (&EvalKind::Ident(x), &EvalKind::Ident(y)) => {
-                                return Some(DragIdent::xy(Some(x), Some(y)))
-                            }
-                            (&EvalKind::Ident(x), _) => return Some(DragIdent::xy(Some(x), None)),
-                            (_, &EvalKind::Ident(y)) => return Some(DragIdent::xy(None, Some(y))),
                             _ => {}
                         }
                     }
@@ -417,6 +443,7 @@ impl Statements<'_> {
         let mut drawables = DrawableList::new();
 
         for stmt in &self.statements {
+            // println!("asssigning to {:?}", stmt.expr);
             let draw = stmt.execute(&context.functions, &mut context.context);
             if let Some((index, drawable)) = draw {
                 drawables.insert(index, drawable);

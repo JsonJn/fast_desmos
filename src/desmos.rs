@@ -221,11 +221,11 @@ fn parse_expr_v_option(s: &serde_json::Value) -> Option<EvalExpr> {
 
 fn parse_stmt_v(s: &serde_json::Value) -> Statement {
     let string = s.as_str().unwrap().to_string();
-    // if string.len() < 1000 {
-    //     println!("{string}");
-    // } else {
-    //     println!("too long!");
-    // }
+    if string.len() < 1000 {
+        println!("{string}");
+    } else {
+        println!("too long!");
+    }
     // println!("{string}");
     let (lexed, _) = Lexer::lex(string).expect("Statement lexing failed!");
     // println!("{lexed:?}");
@@ -257,7 +257,19 @@ impl DesmosPage {
             let pattern =
                 Regex::new("<meta property=\"og:title\" content=\"([^\"]*)\" />").unwrap();
 
-            let html = reqwest::blocking::get(url).unwrap().text().unwrap();
+            let mut request_count = 0;
+            let html = loop {
+                request_count += 1;
+                println!("Downloading webpage attempt {request_count}");
+                let get = reqwest::blocking::get(url.clone());
+                if let Ok(x) = get {
+                    break x;
+                } else if request_count >= 20 {
+                    panic!("Too many retries: greater than 20.")
+                }
+            }
+            .text()
+            .unwrap();
 
             let mat = pattern.captures(&html).expect("Title not found.");
             let title = mat.get(1).unwrap().as_str().to_string();

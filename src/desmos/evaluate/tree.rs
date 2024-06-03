@@ -889,6 +889,6 @@ pub enum EvalKind {
     IfElse {
         cond: Conditional,
         yes: EvalExpr,
-        no: EvalExpr,
+        no: Option<EvalExpr>,
     },
 }

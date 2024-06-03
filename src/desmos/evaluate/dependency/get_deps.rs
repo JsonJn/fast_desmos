@@ -73,7 +73,7 @@ impl CanDepend for EvalKind {
             EvalKind::ListComprehension { defs, expr } => {
                 let mut deps = expr.get_deps();
                 for def in defs {
-                    if let Some(i) = deps.iter().position(|&v| v == def.var.0) {
+                    while let Some(i) = deps.iter().position(|&v| v == def.var.0) {
                         deps.swap_remove(i);
                     }
                 }
@@ -122,9 +122,10 @@ impl CanDepend for EvalKind {
                 vec_concat(vec_concat(deps, from.get_deps()), to.get_deps())
             }
             EvalKind::AddSub { exprs, kinds: _ } => exprs.get_deps(),
-            EvalKind::IfElse { cond, yes, no } => {
-                vec_concat(vec_concat(cond.get_deps(), yes.get_deps()), no.get_deps())
-            }
+            EvalKind::IfElse { cond, yes, no } => vec_concat(
+                vec_concat(cond.get_deps(), yes.get_deps()),
+                no.iter().flat_map(|x| x.get_deps()).collect(),
+            ),
         }
     }
 }

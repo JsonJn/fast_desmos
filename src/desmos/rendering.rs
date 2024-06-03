@@ -7,8 +7,8 @@ use raylib::prelude::{Camera2D, KeyboardKey, RaylibDraw, RaylibFont, RaylibMode2
 use raylib::{check_collision_point_poly, ffi};
 
 use crate::desmos::evaluate::{
-    Color, Colors, Conditional, EvalKind, IdentifierStorer, Numbers, Point, Points, Polygon,
-    Primitive, VarValue, IDENTIFIERS,
+    Color, Colors, Conditional, EvalKind, IdentifierStorer, LinearFunc, Numbers, Point, Points,
+    Polygon, Primitive, VarValue, IDENTIFIERS,
 };
 use crate::desmos::execute::actions::ActValue;
 use crate::desmos::execute::{convert_cells, AllContext, DragIdent};
@@ -72,7 +72,7 @@ struct Processor<'a, 'b, 'c> {
     drawing: &'a mut RaylibMode2D<'b, RaylibDrawHandle<'c>>,
 }
 
-pub enum ClickableInfo<'a> {
+enum ClickableInfo<'a> {
     Hovered,
     Dragged {
         id: Id,
@@ -86,7 +86,7 @@ pub enum ClickableInfo<'a> {
     },
 }
 
-pub struct PointDrawResult {
+struct PointDrawResult {
     index: Option<usize>,
     dragged: Option<(DragIdent, Id, Points)>,
 }
@@ -609,7 +609,7 @@ impl<'a, 'b, 'c> Processor<'a, 'b, 'c> {
 const FONT_SIZE: f32 = 20.0;
 const SCROLL_SPEED: f32 = 1.0;
 
-pub fn render_eval_view<Font: RaylibFont>(
+fn render_eval_view<Font: RaylibFont>(
     drawing: &mut RaylibDrawHandle,
     font: &Font,
     context: &AllContext,
@@ -703,12 +703,20 @@ pub fn window(params: DesmosPage) {
         // println!("FRAME START");
 
         let drawables = statements.cycle(&mut context);
+        let dt = rl.get_frame_time();
         let act_val = run_ticker
-            .then(|| ticker.as_ref().map(|func| context.evaluate_act(&func.expr)))
+            .then(|| {
+                ticker.as_ref().map(|func| {
+                    context.evaluate_act_with(
+                        &func.expr,
+                        IdentifierStorer::IDENT_DT,
+                        VarValue::number(1000.0 * dt as f64),
+                    )
+                })
+            })
             .flatten();
         let mouse_pos_world = rl.get_screen_to_world2D(rl.get_mouse_position(), camera);
 
-        let dt = rl.get_frame_time();
         for (key, vec) in KEY_OFFSETS {
             if rl.is_key_down(key) {
                 camera.target += vec * MOVE_SPEED * dt / camera.zoom;
@@ -779,24 +787,43 @@ pub fn window(params: DesmosPage) {
                         ident,
                         points,
                     }) => {
+                        fn apply_if_some(func: Option<LinearFunc>, num: f64) -> f64 {
+                            match func {
+                                None => num,
+                                Some(func) => func.inverse_f64(num),
+                            }
+                        }
+
                         let new_pos = d2.get_screen_to_world2D(d2.get_mouse_position(), camera);
                         let new_pos = (new_pos.x as f64, -new_pos.y as f64);
                         let (sx, sy) = ident.should_xy();
+                        let (map_x, map_y) = match ident {
+                            DragIdent::Point { .. } => (None, None),
+                            DragIdent::XY { x, y } => (x, y),
+                        };
 
                         let new_value = match (index, points) {
                             (Some(index), Points::Many(mut points)) => {
                                 let index = index.get();
                                 if sx {
-                                    points[index].0 = new_pos.0;
+                                    points[index].0 = apply_if_some(map_x, new_pos.0);
                                 }
                                 if sy {
-                                    points[index].1 = new_pos.1;
+                                    points[index].1 = apply_if_some(map_y, new_pos.1);
                                 }
                                 Points::Many(points)
                             }
                             (None, Points::One(point)) => Points::One(Point(
-                                if sx { new_pos.0 } else { point.0 },
-                                if sy { new_pos.1 } else { point.1 },
+                                if sx {
+                                    apply_if_some(map_x, new_pos.0)
+                                } else {
+                                    point.0
+                                },
+                                if sy {
+                                    apply_if_some(map_y, new_pos.1)
+                                } else {
+                                    point.1
+                                },
                             )),
                             _ => unreachable!("Misaligned index and points"),
                         };
@@ -808,8 +835,8 @@ pub fn window(params: DesmosPage) {
                             DragIdent::XY { x, y } => {
                                 let (vx, vy) = new_value.to_coords();
                                 let mut result = Vec::with_capacity(2);
-                                result.extend(x.map(|id| (id, VarValue::from(vx))));
-                                result.extend(y.map(|id| (id, VarValue::from(vy))));
+                                result.extend(x.map(|id| (id.param(), VarValue::from(vx))));
+                                result.extend(y.map(|id| (id.param(), VarValue::from(vy))));
                                 result
                             }
                         };

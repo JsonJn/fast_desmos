@@ -5,6 +5,7 @@ use once_cell::sync::Lazy;
 pub use context::{Functions, FunctionsBuilder, ValueContext};
 pub use convert::ToEval;
 pub use convert::{IdentifierStorer, IDENTIFIERS};
+pub use linear::*;
 pub use tree::*;
 
 use crate::desmos::evaluate::pervasive_applies::{
@@ -458,16 +459,49 @@ impl Evaluable for EvalTree {
             EvalKind::IfElse { cond, yes, no } => {
                 let cond = cond.evaluate(functions, context);
 
+                fn default_of(mut yes: VarValue) -> VarValue {
+                    match &mut yes {
+                        VarValue::Prim(Primitive::Computable(CompPrim::Number(_))) => {
+                            VarValue::number(f64::NAN)
+                        }
+                        VarValue::Prim(Primitive::Computable(CompPrim::Point(_))) => {
+                            VarValue::point(Point(f64::NAN, f64::NAN))
+                        }
+                        VarValue::Prim(Primitive::NonComputable(NonCompPrim::Color(_))) => {
+                            VarValue::color(Color(0, 0, 0))
+                        }
+                        VarValue::Prim(Primitive::NonComputable(NonCompPrim::Polygon(_))) => {
+                            VarValue::polygon(Polygon(Vec::new()))
+                        }
+                        VarValue::List(x) => {
+                            match x {
+                                PrimList::Computable(CompList::Number(x)) => x.clear(),
+                                PrimList::Computable(CompList::Point(x)) => x.clear(),
+                                PrimList::NonComputable(NonCompList::Color(x)) => x.clear(),
+                                PrimList::NonComputable(NonCompList::Polygon(x)) => x.clear(),
+                            }
+                            yes
+                        }
+                    }
+                }
+
                 match cond {
                     CondOutput::Prim(cond) => {
                         if cond {
                             yes.evaluate(functions, context)
                         } else {
-                            no.evaluate(functions, context)
+                            match no.as_ref() {
+                                None => default_of(yes.evaluate(functions, context)),
+                                Some(no) => no.evaluate(functions, context),
+                            }
                         }
                     }
                     CondOutput::List(bools) => {
-                        let [yes, no] = [yes, no].map(|v| v.evaluate(functions, context));
+                        let yes = yes.evaluate(functions, context);
+                        let no = no.as_ref().map_or_else(
+                            || default_of(yes.clone()),
+                            |no| no.evaluate(functions, context),
+                        );
                         let x = PooledVec::from_iter(
                             &POOL_PRIMITIVE,
                             id,

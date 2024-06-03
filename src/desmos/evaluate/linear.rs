@@ -1,6 +1,4 @@
-use std::ops::{Add, BitAnd, Mul};
-
-use value::{LinType, LinearVal};
+pub use value::*;
 
 use crate::desmos::evaluate::constness::CanConst;
 use crate::desmos::evaluate::{Conditional, EvalExpr, EvalKind};
@@ -67,7 +65,10 @@ impl CanLinear for EvalKind {
             EvalKind::SumProd { .. } => LinType::NonLinear,
             EvalKind::AddSub { exprs, kinds: _ } => all_linear(exprs),
             EvalKind::IfElse { cond, yes, no } => {
-                cond.is_const() & yes.is_linear() + no.is_linear()
+                cond.is_const()
+                    & yes.is_linear()
+                        + no.as_ref()
+                            .map_or_else(|| LinType::NonLinear, |x| x.is_linear())
             }
         }
     }
@@ -187,7 +188,7 @@ impl CanLinear for EvalKind {
                 if cond_evaluate(cond) {
                     yes.as_linear()
                 } else {
-                    no.as_linear()
+                    no.as_ref().unwrap().as_linear()
                 }
             }
         }

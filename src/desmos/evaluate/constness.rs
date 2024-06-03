@@ -134,7 +134,12 @@ impl CanConst for EvalKind {
             }
             EvalKind::AddSub { kinds: _, exprs } => exprs.is_const(),
             EvalKind::IfElse { cond, yes, no } => {
-                cond.is_const() && yes.is_const() && no.is_const()
+                cond.is_const()
+                    && yes.is_const()
+                    && match no {
+                        None => true,
+                        Some(x) => x.is_const(),
+                    }
             }
         }
     }
@@ -208,7 +213,7 @@ impl CanConst for EvalKind {
             EvalKind::AddSub { exprs, kinds: _ } => exprs.get_const_deps(),
             EvalKind::IfElse { cond, yes, no } => vec_concat(
                 vec_concat(cond.get_const_deps(), yes.get_const_deps()),
-                no.get_const_deps(),
+                no.iter().flat_map(|x| x.get_const_deps()).collect(),
             ),
         }
     }

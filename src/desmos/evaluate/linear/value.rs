@@ -3,13 +3,13 @@ use std::iter::{Product, Sum};
 use std::ops::{Add, BitAnd, Div, Mul, Neg};
 
 pub enum LinearVal {
-    Linear(LinFunc),
+    Linear(LinearFunc),
     Constant(f64),
 }
 
 impl LinearVal {
     pub fn linear(param: UserIdent, slope: f64, intercept: f64) -> Self {
-        Self::Linear(LinFunc {
+        Self::Linear(LinearFunc {
             param,
             slope,
             intercept,
@@ -21,13 +21,35 @@ impl LinearVal {
     }
 }
 
-struct LinFunc {
+#[derive(Debug, Copy, Clone)]
+pub struct LinearFunc {
     param: UserIdent,
     slope: f64,
     intercept: f64,
 }
 
-impl Add for LinFunc {
+impl LinearFunc {
+    #[inline]
+    pub const fn identity(param: UserIdent) -> Self {
+        Self {
+            param,
+            slope: 1.0,
+            intercept: 0.0,
+        }
+    }
+
+    #[inline]
+    pub fn param(&self) -> UserIdent {
+        self.param
+    }
+
+    #[inline]
+    pub fn inverse_f64(&self, value: f64) -> f64 {
+        (value - self.intercept) / self.slope
+    }
+}
+
+impl Add for LinearFunc {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
@@ -59,7 +81,7 @@ impl Add<f64> for LinearVal {
 
     fn add(mut self, rhs: f64) -> Self::Output {
         match &mut self {
-            LinearVal::Linear(LinFunc { intercept, .. }) => {
+            LinearVal::Linear(LinearFunc { intercept, .. }) => {
                 *intercept += rhs;
             }
             LinearVal::Constant(x) => {
@@ -81,7 +103,7 @@ impl Neg for LinearVal {
     }
 }
 
-impl Neg for LinFunc {
+impl Neg for LinearFunc {
     type Output = Self;
 
     fn neg(self) -> Self::Output {
@@ -134,7 +156,7 @@ impl Div for LinearVal {
     }
 }
 
-impl Mul<f64> for LinFunc {
+impl Mul<f64> for LinearFunc {
     type Output = Self;
 
     fn mul(self, rhs: f64) -> Self::Output {
@@ -146,7 +168,7 @@ impl Mul<f64> for LinFunc {
     }
 }
 
-impl Div<f64> for LinFunc {
+impl Div<f64> for LinearFunc {
     type Output = Self;
 
     fn div(self, rhs: f64) -> Self::Output {
@@ -158,6 +180,7 @@ impl Div<f64> for LinFunc {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum LinType {
     NonLinear,
     Constant,
