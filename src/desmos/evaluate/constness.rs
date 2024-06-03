@@ -1,46 +1,61 @@
 use crate::desmos::evaluate::{Builtins, Conditional, EvalExpr, EvalKind, EvalTree, Ident, VarDef};
 use crate::vecs::{iter_concat, vec_concat};
 
-/// The only purpose of this system's existence is `random`
-///
-/// The `CanDepend` system works well for dependencies,
-/// and as such is used for dependency analysis in evaluation
-/// ordering.
-///
-/// It's also used to evaluate whether an `EvalExpr` can be
-/// cached. This breaks on `random` because `random` has no
-/// dependencies in evaluation but requires re-evaluation
-/// every time.
-
 pub trait CanConst {
+    fn is_const(&self) -> bool;
     fn get_const_deps(&self) -> Vec<usize>;
 }
 
 impl CanConst for EvalExpr {
+    fn is_const(&self) -> bool {
+        self.expr.kind.is_const()
+    }
+
     fn get_const_deps(&self) -> Vec<usize> {
         self.expr.kind.get_const_deps()
     }
 }
 
 impl CanConst for EvalTree {
+    fn is_const(&self) -> bool {
+        self.kind.is_const()
+    }
+
     fn get_const_deps(&self) -> Vec<usize> {
         self.kind.get_const_deps()
     }
 }
 
 impl<T: CanConst> CanConst for Vec<T> {
+    fn is_const(&self) -> bool {
+        self.iter().all(|i| i.is_const())
+    }
+
     fn get_const_deps(&self) -> Vec<usize> {
         self.iter().flat_map(CanConst::get_const_deps).collect()
     }
 }
 
 impl CanConst for VarDef {
+    fn is_const(&self) -> bool {
+        self.expr.is_const()
+    }
+
     fn get_const_deps(&self) -> Vec<usize> {
         self.expr.get_const_deps()
     }
 }
 
 impl CanConst for Ident {
+    fn is_const(&self) -> bool {
+        match self {
+            Ident::User(_) => false,
+            // The literal only difference.
+            Ident::Builtin(Builtins::Random) => false,
+            Ident::Builtin(_) => true,
+        }
+    }
+
     fn get_const_deps(&self) -> Vec<usize> {
         match self {
             Ident::User(id) => vec![id.0],
@@ -52,6 +67,17 @@ impl CanConst for Ident {
 }
 
 impl CanConst for Conditional {
+    fn is_const(&self) -> bool {
+        match self {
+            Conditional::Inequality {
+                id: _,
+                exprs,
+                comp: _,
+            } => exprs.is_const(),
+            Conditional::Equality { id: _, exprs } => exprs.is_const(),
+        }
+    }
+
     fn get_const_deps(&self) -> Vec<usize> {
         match self {
             Conditional::Inequality {
@@ -65,6 +91,54 @@ impl CanConst for Conditional {
 }
 
 impl CanConst for EvalKind {
+    fn is_const(&self) -> bool {
+        match self {
+            EvalKind::Ident(_) => false,
+            EvalKind::Number(_) => true,
+            EvalKind::Point { x, y } => x.is_const() && y.is_const(),
+            EvalKind::List(xs) => xs.is_const(),
+            EvalKind::ListRange { before, after } => before.is_const() && after.is_const(),
+            EvalKind::ListComprehension { defs, expr } => {
+                defs.is_const() && {
+                    let defined: Vec<_> = defs.iter().map(|x| x.var.0).collect();
+                    expr.get_const_deps()
+                        .into_iter()
+                        .all(|x| defined.contains(&x))
+                }
+            }
+            EvalKind::AbsoluteValue(x) => x.is_const(),
+            EvalKind::Fraction { top, bottom } => top.is_const() && bottom.is_const(),
+            EvalKind::Root { nth: _, expr } => expr.is_const(),
+            EvalKind::FunctionCall {
+                func,
+                prime_count: _,
+                power: _,
+                params,
+            } => func.is_const() && params.is_const(),
+            EvalKind::Power { base, power } => base.is_const() && power.is_const(),
+            EvalKind::IntPower { base, power: _ } => base.is_const(),
+            EvalKind::ListIndexing { list, index } => list.is_const() && index.is_const(),
+            EvalKind::ListFiltering { list, filter } => list.is_const() && filter.is_const(),
+            EvalKind::ElementAccess { expr, element: _ } => expr.is_const(),
+            EvalKind::Multiply(mult) => mult.is_const(),
+            EvalKind::SumProd {
+                expr,
+                from,
+                to,
+                counter,
+                kind: _,
+            } => {
+                from.is_const() && to.is_const() && {
+                    expr.get_const_deps().iter().all(|&dep| dep == counter.0)
+                }
+            }
+            EvalKind::AddSub { kinds: _, exprs } => exprs.is_const(),
+            EvalKind::IfElse { cond, yes, no } => {
+                cond.is_const() && yes.is_const() && no.is_const()
+            }
+        }
+    }
+
     fn get_const_deps(&self) -> Vec<usize> {
         match &self {
             EvalKind::Ident(i) => vec![i.0],
@@ -116,7 +190,6 @@ impl CanConst for EvalKind {
             }
             EvalKind::ElementAccess { expr, element: _ } => expr.get_const_deps(),
             EvalKind::Multiply(exprs) => exprs.get_const_deps(),
-            EvalKind::Differentiate(_) => todo!("Won't implement before evaluation is done"),
             EvalKind::SumProd {
                 expr,
                 from,

@@ -106,7 +106,6 @@ impl CanDepend for EvalKind {
             }
             EvalKind::ElementAccess { expr, element: _ } => expr.get_deps(),
             EvalKind::Multiply(exprs) => exprs.get_deps(),
-            EvalKind::Differentiate(_) => todo!("Won't implement before evaluation is done"),
             EvalKind::SumProd {
                 expr,
                 from,

@@ -198,8 +198,8 @@ impl ToEval for EverythingElse {
             EverythingElse::Ident(id) => {
                 EvalExpr::new_generated(EvalKind::Ident(IDENTIFIERS.name_to_int(&id.0)))
             }
-            EverythingElse::Differentiate(Differentiate { expr }) => {
-                EvalExpr::new_generated(EvalKind::Differentiate(expr.to_eval()))
+            EverythingElse::Differentiate(Differentiate { .. }) => {
+                unreachable!("Differentiation isn't implemented in evaluation yet.")
             }
             EverythingElse::SumProd(SumProd {
                 expr,

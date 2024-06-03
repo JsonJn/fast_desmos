@@ -31,7 +31,7 @@ pub struct EvalExpr {
 impl EvalExpr {
     pub fn new(tree: EvalTree) -> Self {
         Self {
-            cache: tree.get_const_deps().is_empty().then(OnceLock::new),
+            cache: tree.is_const().then(OnceLock::new),
             expr: Box::new(tree),
         }
     }
@@ -875,7 +875,6 @@ pub enum EvalKind {
         element: Element,
     },
     Multiply(Vec<EvalExpr>),
-    Differentiate(EvalExpr),
     SumProd {
         kind: SumOrProduct,
         expr: EvalExpr,

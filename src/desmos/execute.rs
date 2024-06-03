@@ -1,9 +1,9 @@
 use std::cell::RefCell;
 use std::convert::identity;
 
+pub use crate::desmos::evaluate::CanDepend;
+use crate::desmos::evaluate::{reorder_inplace, topological_indices, topological_sort};
 use actions::{ActContext, ActEvaluable, ActExpr, ActFunction, ActIdent, ToActExpr, ACT_IDENTS};
-pub use dependency::CanDepend;
-use dependency::{topological_indices, topological_sort};
 
 use crate::desmos::evaluate::{
     CompList, CompPrim, EvalExpr, EvalKind, EvalTree, Evaluable, Function, Functions,
@@ -12,7 +12,6 @@ use crate::desmos::evaluate::{
 };
 use crate::desmos::evaluate::{Points, Polygons};
 use crate::desmos::execute::actions::{ActFuncBuilder, ActFunctions, ActValue};
-use crate::desmos::execute::dependency::reorder_inplace;
 use crate::desmos::rendering::drawables::{
     DrawColor, DrawPoints, DrawPolygons, Drawable, DrawableList, DrawableType, ExplicitEq,
     ExplicitType, ParametricDomain, ParametricEq, DOMAIN_DEFAULT,
@@ -21,7 +20,6 @@ use crate::desmos::{parsing, Clickable, DesmosCell, Options};
 use crate::pooled_vec::Id;
 
 pub mod actions;
-mod dependency;
 
 #[derive(Debug, Clone)]
 pub enum SpecialDeps<'a> {

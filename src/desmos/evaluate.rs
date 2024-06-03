@@ -15,9 +15,13 @@ use crate::desmos::parsing::{AddOrSub, Element, SumOrProduct};
 pub use crate::desmos::value::*;
 use crate::pooled_vec::{PooledVec, VecPool};
 
+pub use dependency::{reorder_inplace, topological_indices, topological_sort, CanDepend};
+
 mod constness;
 mod context;
 mod convert;
+mod dependency;
+mod linear;
 mod pervasive_applies;
 mod tree;
 
@@ -379,7 +383,6 @@ impl Evaluable for EvalTree {
                     Primitive::Computable(prod)
                 })
             }
-            EvalKind::Differentiate(_) => todo!("Differentiation 😱😱😱😱"),
             EvalKind::SumProd {
                 expr,
                 counter,
