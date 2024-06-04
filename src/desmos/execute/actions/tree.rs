@@ -1,7 +1,14 @@
 use crate::desmos::evaluate::{Conditional, EvalExpr, UserIdent};
+use crate::vec_map::AsIndex;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct ActIdent(pub usize);
+
+impl AsIndex for ActIdent {
+    fn as_index(&self) -> usize {
+        self.0
+    }
+}
 
 impl From<ActIdent> for usize {
     fn from(value: ActIdent) -> Self {

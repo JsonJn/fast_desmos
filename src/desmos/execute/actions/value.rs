@@ -8,6 +8,7 @@ pub struct ActValue {
     pub pairs: Vec<(UserIdent, VarValue)>,
 }
 
+#[allow(dead_code)]
 impl ActValue {
     pub fn new(pairs: Vec<(UserIdent, VarValue)>) -> Self {
         Self { pairs }

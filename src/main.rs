@@ -10,6 +10,7 @@ mod iterator;
 mod pooled_vec;
 #[cfg(test)]
 mod tests;
+mod vec_map;
 mod vecs;
 
 macro_rules! strings {
@@ -71,7 +72,7 @@ fn main() {
         D20 = "https://www.desmos.com/calculator/y0s6d3xy4t";
     }
 
-    let desmos = DesmosPage::from_url(BLINDMOKU).unwrap();
+    let desmos = DesmosPage::from_url(GRAVITY_IDEAL_GAS).unwrap();
     desmos::rendering::window(desmos);
 
     // println!("{:?}", size_of::<EvalTree>());

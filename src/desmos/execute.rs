@@ -717,7 +717,7 @@ impl AllContext {
         }
     }
 
-    pub fn iter_values(&self) -> impl Iterator<Item = (&UserIdent, &VarValue)> {
+    pub fn iter_values(&self) -> impl Iterator<Item = (UserIdent, &VarValue)> {
         self.context.iter()
     }
 

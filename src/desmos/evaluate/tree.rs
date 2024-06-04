@@ -21,6 +21,7 @@ use crate::desmos::value::{
 use crate::gamma::gamma;
 use crate::pooled_vec::PooledVec;
 use crate::take_pat;
+use crate::vec_map::AsIndex;
 
 #[derive(PartialEq, Debug)]
 pub struct EvalExpr {
@@ -72,6 +73,12 @@ impl Debug for UserIdent {
 impl From<UserIdent> for usize {
     fn from(value: UserIdent) -> Self {
         value.0
+    }
+}
+
+impl AsIndex for UserIdent {
+    fn as_index(&self) -> usize {
+        self.0
     }
 }
 

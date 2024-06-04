@@ -1,16 +1,15 @@
-use rustc_hash::FxHashMap;
-
 use crate::desmos::evaluate::{Function, IdentifierStorer, UserIdent};
 use crate::desmos::value::VarValue;
+use crate::vec_map::VecMap;
 
 #[derive(Default)]
 pub struct FunctionsBuilder {
-    values: FxHashMap<UserIdent, Function>,
+    values: VecMap<UserIdent, Function>,
 }
 
 impl FunctionsBuilder {
     pub fn add_function(&mut self, ident: UserIdent, function: Function) {
-        self.values.insert(ident, function);
+        self.values.insert(&ident, function);
     }
 
     pub fn build(self) -> Functions {
@@ -22,7 +21,7 @@ impl FunctionsBuilder {
 
 #[derive(Default, Debug)]
 pub struct Functions {
-    values: FxHashMap<UserIdent, Function>,
+    values: VecMap<UserIdent, Function>,
 }
 
 impl Functions {
@@ -36,18 +35,18 @@ impl Functions {
 
 #[derive(Debug)]
 pub struct ValueContext {
-    values: FxHashMap<UserIdent, VarValue>,
+    values: VecMap<UserIdent, VarValue>,
 }
 
 impl Default for ValueContext {
     fn default() -> Self {
-        let mut values = FxHashMap::default();
+        let mut values = VecMap::default();
         values.insert(
-            IdentifierStorer::IDENT_PI,
+            &IdentifierStorer::IDENT_PI,
             VarValue::number(std::f64::consts::PI),
         );
         values.insert(
-            IdentifierStorer::IDENT_INFINITY,
+            &IdentifierStorer::IDENT_INFINITY,
             VarValue::number(f64::INFINITY),
         );
 
@@ -63,10 +62,11 @@ impl ValueContext {
         self.values.len()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&UserIdent, &VarValue)> {
+    pub fn iter(&self) -> impl Iterator<Item = (UserIdent, &VarValue)> {
         self.values
             .iter()
-            .filter(|x| !IdentifierStorer::RESERVED_IDENTS.contains(x.0))
+            .filter(|x| !IdentifierStorer::RESERVED_IDENTS.contains(&UserIdent(x.0)))
+            .map(|(a, b)| (UserIdent(a), b))
     }
 
     pub fn unset(&mut self, ident: UserIdent) {
@@ -85,7 +85,7 @@ impl ValueContext {
     #[must_use]
     pub fn set_value(&mut self, ident: UserIdent, value: VarValue) -> Option<VarValue> {
         let old = self.values.remove(&ident);
-        self.values.insert(ident, value);
+        self.values.insert(&ident, value);
         old
     }
 

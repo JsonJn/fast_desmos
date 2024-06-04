@@ -112,10 +112,6 @@ impl Lexer {
         })
     }
 
-    pub fn all_lexed(&self) -> bool {
-        !self.data.has_remaining()
-    }
-
     pub fn lex_self(&mut self) -> Vec<Token> {
         let mut tokens = Vec::new();
         while let Some(token) = self.lex_one() {

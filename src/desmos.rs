@@ -207,12 +207,6 @@ pub struct Clickable {
     pub expr: ActExpr,
 }
 
-fn parse_expr(s: String) -> EvalExpr {
-    Parser::parse_expr(Lexer::lex(s).unwrap().0)
-        .unwrap()
-        .to_eval()
-}
-
 fn parse_expr_v(s: &serde_json::Value) -> EvalExpr {
     let text = s.as_str().unwrap().to_string();
     // println!("{text}");

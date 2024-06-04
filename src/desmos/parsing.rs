@@ -129,13 +129,6 @@ impl Parser {
         }
     }
 
-    fn must_be(&mut self, token: &Token) -> Option<()> {
-        self.data
-            .guard_accepted()
-            .advance_if_eq(token)
-            .then_some(())
-    }
-
     fn parse_statement(&mut self) -> Option<Statement> {
         log!("parsing statement");
         log!("status: {:?}", self.data);

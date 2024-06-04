@@ -238,13 +238,14 @@ impl<'a, 'b, 'c> Processor<'a, 'b, 'c> {
                 .enumerate()
             {
                 let radius = diameter as f32 / 2.0 / self.zoom;
+                let visual_radius = radius * self.camera.zoom;
 
                 let center: Vector2 = p.into();
                 let Vector2 { x: px, y: py } = center;
 
-                let circle_points: &[(f32, f32)] = if diameter < 20.0 {
+                let circle_points: &[(f32, f32)] = if visual_radius < 10.0 {
                     &CIRCLE_8
-                } else if diameter < 100.0 {
+                } else if visual_radius < 100.0 {
                     &CIRCLE_16
                 } else {
                     &CIRCLE_32
@@ -622,7 +623,7 @@ fn render_eval_view<Font: RaylibFont>(
     let mut positions = Vec::with_capacity(context.len_values());
     let mut position = scroll_amt;
     let mut max_width = f32::NAN;
-    for (&ident, _) in context.iter_values() {
+    for (ident, _) in context.iter_values() {
         let name = IDENTIFIERS.int_to_name(ident).unwrap();
         let Vector2 { x, y } = font.measure_text(&name, FONT_SIZE, SPACING);
         max_width = max_width.max(x);
@@ -856,7 +857,6 @@ pub fn window(params: DesmosPage) {
 
             if let Some(act_val) = clickable_val {
                 // println!("{act_val:?}");
-                d.draw_text("Clicked!", 100, 0, 30, rl_prelude::Color::CYAN);
 
                 statements.remove_calculations(act_val.pairs.iter().map(|v| v.0));
                 context.apply_act_value(act_val);

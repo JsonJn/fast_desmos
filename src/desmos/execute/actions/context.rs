@@ -1,15 +1,15 @@
 use super::{ActExpr, ActIdent, ActValue};
-use crate::desmos::evaluate::{UserIdent};
-use rustc_hash::FxHashMap;
+use crate::desmos::evaluate::UserIdent;
+use crate::vec_map::VecMap;
 
 #[derive(Default)]
 pub struct ActFuncBuilder {
-    values: FxHashMap<ActIdent, ActFunction>,
+    values: VecMap<ActIdent, ActFunction>,
 }
 
 impl ActFuncBuilder {
     pub fn add_function(&mut self, ident: ActIdent, function: ActFunction) {
-        self.values.insert(ident, function);
+        self.values.insert(&ident, function);
     }
 
     pub fn build(self) -> ActFunctions {
@@ -20,7 +20,7 @@ impl ActFuncBuilder {
 }
 
 pub struct ActFunctions {
-    values: FxHashMap<ActIdent, ActFunction>,
+    values: VecMap<ActIdent, ActFunction>,
 }
 
 impl ActFunctions {
@@ -37,9 +37,10 @@ pub struct ActFunction {
 
 #[derive(Debug, Default)]
 pub struct ActContext {
-    values: FxHashMap<ActIdent, ActValue>,
+    values: VecMap<ActIdent, ActValue>,
 }
 
+#[allow(dead_code)]
 impl ActContext {
     pub fn get_value(&self, ident: ActIdent) -> ActValue {
         match self.values.get(&ident) {
@@ -49,7 +50,7 @@ impl ActContext {
     }
 
     pub fn set_value(&mut self, ident: ActIdent, value: ActValue) {
-        self.values.insert(ident, value);
+        self.values.insert(&ident, value);
     }
 
     pub fn is_initialized(&self, ident: ActIdent) -> bool {

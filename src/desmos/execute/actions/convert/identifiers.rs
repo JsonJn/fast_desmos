@@ -6,6 +6,7 @@ pub struct ActIdentifierStorer {
     idents: Mutex<Vec<String>>,
 }
 
+#[allow(dead_code)]
 impl ActIdentifierStorer {
     pub fn new() -> Self {
         Self {
