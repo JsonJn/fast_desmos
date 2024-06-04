@@ -41,9 +41,9 @@ Below is a full list of supported and to-be-supported features:
     - [ ] line type
 - [ ] Points
     - [x] Points with custom sizes, opacity, **but not point type**
-    - [ ] draggable
+    - [x] draggable
         - [x] draggable on both or no axis
-        - [ ] draggable on only x-axs or y-axis
+        - [x] draggable on only x-axs or y-axis
     - [ ] point type
 - [x] Custom colors (`rgb`, `hsv`)
 - [x] All Builtin functions **except for distributions**
