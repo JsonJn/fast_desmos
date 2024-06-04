@@ -157,12 +157,20 @@ pub struct StoredDragMode {
 }
 
 #[derive(Debug)]
+pub struct SliderBounds {
+    pub min: Option<EvalExpr>,
+    pub max: Option<EvalExpr>,
+    pub step: Option<EvalExpr>,
+}
+
+#[derive(Debug)]
 pub struct DesmosCell {
     pub statement: Statement,
     pub draw_color: DrawColor,
     pub options: Options,
     pub domain: Option<ParametricDomain>,
     pub clickable: Option<Clickable>,
+    pub slider: Option<SliderBounds>,
 }
 
 #[derive(Debug)]
@@ -412,6 +420,28 @@ impl DesmosPage {
                         }
                     });
 
+                    // Slider bounds
+                    let slider = expr.get("slider").map(|v| {
+                        let obj = v.as_object().unwrap();
+
+                        fn is_true_at(
+                            x: &serde_json::Map<String, serde_json::Value>,
+                            name: &str,
+                        ) -> bool {
+                            x.get(name).map(|v| v.as_bool().unwrap()).unwrap_or(false)
+                        }
+
+                        let step = obj.get("step").map(parse_expr_v);
+                        let min = is_true_at(obj, "hardMin")
+                            .then(|| obj.get("min").map(parse_expr_v))
+                            .flatten();
+                        let max = is_true_at(obj, "hardMax")
+                            .then(|| obj.get("max").map(parse_expr_v))
+                            .flatten();
+
+                        SliderBounds { min, max, step }
+                    });
+
                     Some(DesmosCell {
                         statement,
                         draw_color,
@@ -424,6 +454,7 @@ impl DesmosPage {
                         },
                         domain,
                         clickable,
+                        slider,
                     })
                 } else {
                     None

@@ -665,13 +665,15 @@ pub fn window(params: DesmosPage) {
         ticker,
     } = params;
 
-    let (mut context, mut statements) = convert_cells(cells);
+    let (mut context, mut statements, bounds) = convert_cells(cells);
 
     let (mut rl, thread) = raylib::init()
         .size(WIDTH, HEIGHT)
         .title(&title)
         .msaa_4x()
         .build();
+
+    rl.set_exit_key(None);
 
     let fps = min_steps_ms.map(|v| 1000.0 / v).unwrap_or(60.0);
     rl.set_target_fps(fps as u32);
@@ -741,7 +743,7 @@ pub fn window(params: DesmosPage) {
             }
         }
 
-        let clickable_val = {
+        {
             let mut d = rl.begin_drawing(&thread);
 
             d.clear_background(raylib::prelude::Color::WHITE);
@@ -851,15 +853,15 @@ pub fn window(params: DesmosPage) {
             }
 
             d.draw_fps(0, 0);
-            clickable_val
+
+            if let Some(act_val) = clickable_val {
+                // println!("{act_val:?}");
+                d.draw_text("Clicked!", 100, 0, 30, rl_prelude::Color::CYAN);
+
+                statements.remove_calculations(act_val.pairs.iter().map(|v| v.0));
+                context.apply_act_value(act_val);
+            }
         };
-
-        if let Some(act_val) = clickable_val {
-            // println!("{act_val:?}");
-
-            statements.remove_calculations(act_val.pairs.iter().map(|v| v.0));
-            context.apply_act_value(act_val);
-        }
 
         if let Some(act_val) = act_val {
             // println!("{act_val:?}");
@@ -867,5 +869,7 @@ pub fn window(params: DesmosPage) {
             statements.remove_calculations(act_val.pairs.iter().map(|v| v.0));
             context.apply_act_value(act_val);
         }
+
+        context.apply_bounds(&bounds);
     }
 }

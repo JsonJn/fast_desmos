@@ -131,6 +131,18 @@ impl TryFrom<VarValue> for Primitive {
     }
 }
 
+impl TryFrom<VarValue> for f64 {
+    type Error = VarValue;
+
+    fn try_from(value: VarValue) -> Result<Self, Self::Error> {
+        if let VarValue::Prim(Primitive::Computable(CompPrim::Number(x))) = value {
+            Ok(x)
+        } else {
+            Err(value)
+        }
+    }
+}
+
 impl Display for VarValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {

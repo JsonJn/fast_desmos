@@ -19,7 +19,7 @@ use crate::desmos::rendering::drawables::{
     DrawColor, DrawPoints, DrawPolygons, Drawable, DrawableList, DrawableType, ExplicitEq,
     ExplicitType, ParametricDomain, ParametricEq, DOMAIN_DEFAULT,
 };
-use crate::desmos::{parsing, Clickable, DesmosCell, Options};
+use crate::desmos::{parsing, Clickable, DesmosCell, Options, SliderBounds};
 use crate::pooled_vec::Id;
 use crate::take_pat;
 
@@ -433,6 +433,11 @@ impl Statement<'_> {
     }
 }
 
+pub struct VarBound {
+    ident: UserIdent,
+    bounds: SliderBounds,
+}
+
 pub struct Statements<'a> {
     statements: Vec<Statement<'a>>,
     act_statements: Vec<ActStatement>,
@@ -480,14 +485,16 @@ impl Statements<'_> {
     }
 }
 
-pub fn convert_cells(stmts: Vec<DesmosCell>) -> (AllContext, Statements<'static>) {
-    let mut var_defs = vec![];
-    let mut act_var_defs = vec![];
-    let mut exprs = vec![];
-    let mut act_exprs = vec![];
-    let mut func_idents = vec![];
+pub fn convert_cells(stmts: Vec<DesmosCell>) -> (AllContext, Statements<'static>, Vec<VarBound>) {
+    let mut var_defs = Vec::new();
+    let mut act_var_defs = Vec::new();
+    let mut exprs = Vec::new();
+    let mut act_exprs = Vec::new();
+    let mut func_idents = Vec::new();
     let mut act_funcs = ActFuncBuilder::default();
     let mut funcs = FunctionsBuilder::default();
+
+    let mut bounds = Vec::new();
 
     for (draw_index, cell) in stmts.into_iter().enumerate() {
         let DesmosCell {
@@ -496,6 +503,7 @@ pub fn convert_cells(stmts: Vec<DesmosCell>) -> (AllContext, Statements<'static>
             draw_color,
             domain,
             clickable,
+            slider,
         } = cell;
 
         match statement {
@@ -527,6 +535,14 @@ pub fn convert_cells(stmts: Vec<DesmosCell>) -> (AllContext, Statements<'static>
                     .convert_ident(ident)
                     .to_user()
                     .expect("Variable name must be user-ident");
+
+                if let Some(bound) = slider {
+                    bounds.push(VarBound {
+                        ident: x,
+                        bounds: bound,
+                    })
+                }
+
                 var_defs.push((
                     x,
                     expr.to_eval(),
@@ -652,6 +668,7 @@ pub fn convert_cells(stmts: Vec<DesmosCell>) -> (AllContext, Statements<'static>
             statements,
             act_statements,
         },
+        bounds,
     )
 }
 
@@ -663,6 +680,37 @@ pub struct AllContext {
 }
 
 impl AllContext {
+    pub fn apply_bounds(&mut self, bounds: &Vec<VarBound>) {
+        for VarBound { ident, bounds } in bounds {
+            let current = self.context.get_value(*ident);
+            let current: f64 = current.try_into().expect("");
+
+            let SliderBounds { min, max, step } = bounds;
+
+            let [min, max, step] = [min, max, step].map(|expr| {
+                expr.as_ref()
+                    .map(|v| self.evaluate(v))
+                    .map(f64::try_from)
+                    .map(|r| r.expect("Bounds must be numbers"))
+            });
+
+            let stepped = step.map_or_else(
+                || current,
+                |step| {
+                    let min = min.unwrap_or(0.0);
+                    let offset = current - min;
+                    let rounded = (offset / step).round();
+                    rounded + min
+                },
+            );
+
+            let after_min = min.map_or_else(|| stepped, |min| stepped.max(min));
+            let after_max = max.map_or_else(|| after_min, |max| after_min.min(max));
+
+            let _ = self.context.set_value(*ident, VarValue::number(after_max));
+        }
+    }
+
     pub fn apply_act_value(&mut self, act_value: ActValue) {
         for (id, value) in act_value.pairs {
             let _ = self.context.set_value(id, value);
