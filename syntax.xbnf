@@ -1,4 +1,0 @@
-result = statement | expression
-
-statement = identifier "=" expression
-

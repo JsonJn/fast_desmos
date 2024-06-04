@@ -1,3 +1,0 @@
-#M_{ove}\left(i_{0}\right)=l\to L_{set}\left(l,i_{0},P\right),P\to3-P,c_{olors}\to\operatorname{round}\left(\operatorname{random}\left(15\cdot15\right)\right),c_{hsv}\to\operatorname{round}\left(360\operatorname{random}\left(15\cdot15\right)\right)
-F_{unc}\left(p_{0}\right)=A\to B
-#A_{ction}=A\to B
