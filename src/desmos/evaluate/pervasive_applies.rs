@@ -1,4 +1,4 @@
-use crate::desmos::evaluate::{POOL_BOOL, POOL_PRIMITIVE, POOL_VAR_VALUE};
+use crate::desmos::evaluate::{CondOutput, POOL_BOOL, POOL_PRIMITIVE, POOL_VAR_VALUE};
 use crate::desmos::value::{CompPrim, Computable, Primitive, VarValue};
 use crate::pooled_vec::{Id, PooledVec};
 use crate::take_pat;
@@ -128,14 +128,14 @@ pub(super) fn pervasive_apply_comp_variadic_bool(
     id: Id,
     params: Vec<Computable>,
     mut func: impl FnMut(&mut dyn Iterator<Item = CompPrim>) -> bool,
-) -> Result<bool, PooledVec<bool>> {
+) -> CondOutput {
     if params.iter().all(|v| matches!(v, Computable::Prim(_))) {
         let values = &mut params
             .into_iter()
             .map(|v| take_pat!(v => x from Computable::Prim(x)));
         let v = func(values);
 
-        Ok(v)
+        CondOutput::Prim(v)
     } else {
         let length = params
             .iter()
@@ -149,6 +149,35 @@ pub(super) fn pervasive_apply_comp_variadic_bool(
             (0..length).map(|i| func(&mut params.iter().map(|v| v.get(i)))),
         );
 
-        Err(a)
+        CondOutput::List(a)
+    }
+}
+
+pub(super) fn pervasive_apply_bool_variadic_bool(
+    id: Id,
+    params: Vec<CondOutput>,
+    mut func: impl FnMut(&mut dyn Iterator<Item = bool>) -> bool,
+) -> CondOutput {
+    if params.iter().all(|v| matches!(v, CondOutput::Prim(_))) {
+        let values = &mut params
+            .into_iter()
+            .map(|v| take_pat!(v => x from CondOutput::Prim(x)));
+        let v = func(values);
+
+        CondOutput::Prim(v)
+    } else {
+        let length = params
+            .iter()
+            .map(|v| v.len().unwrap_or(usize::MAX))
+            .min()
+            .unwrap();
+
+        let a = PooledVec::from_iter(
+            &POOL_BOOL,
+            id,
+            (0..length).map(|i| func(&mut params.iter().map(|v| v.get(i)))),
+        );
+
+        CondOutput::List(a)
     }
 }

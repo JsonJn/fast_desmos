@@ -7,7 +7,7 @@ use raylib::prelude::{Camera2D, KeyboardKey, RaylibDraw, RaylibFont, RaylibMode2
 use raylib::{check_collision_point_poly, ffi};
 
 use crate::desmos::evaluate::{
-    Color, Colors, Conditional, EvalKind, IdentifierStorer, LinearFunc, Numbers, Point, Points,
+    Color, Colors, EvalKind, IdentifierStorer, LinearFunc, Numbers, OneConditional, Point, Points,
     Polygon, Primitive, VarValue, IDENTIFIERS,
 };
 use crate::desmos::execute::actions::ActValue;
@@ -444,50 +444,57 @@ impl<'a, 'b, 'c> Processor<'a, 'b, 'c> {
                         let constraint = &exprs[1];
                         let (first, constraint) = (first.expr.as_ref(), constraint.expr.as_ref());
                         if let EvalKind::IfElse {
-                            cond: Conditional::Inequality { id: _, exprs, comp },
+                            cond,
                             yes: _,
                             no: _,
                         } = &constraint.kind
                         {
-                            if 2 <= exprs.len() && exprs.len() <= 3 {
-                                let all_lt = comp.iter().all(|&c| {
-                                    c == InequalityType::LessThan
-                                        || c == InequalityType::LessOrEqual
-                                });
+                            if cond.conds.len() == 1 {
+                                if let OneConditional::Inequality { id: _, comp, exprs } =
+                                    &cond.conds[0]
+                                {
+                                    if 2 <= exprs.len() && exprs.len() <= 3 {
+                                        let all_lt = comp.iter().all(|&c| {
+                                            c == InequalityType::LessThan
+                                                || c == InequalityType::LessOrEqual
+                                        });
 
-                                let all_gt = comp.iter().all(|&c| {
-                                    c == InequalityType::MoreThan
-                                        || c == InequalityType::MoreOrEqual
-                                });
+                                        let all_gt = comp.iter().all(|&c| {
+                                            c == InequalityType::MoreThan
+                                                || c == InequalityType::MoreOrEqual
+                                        });
 
-                                if all_lt || all_gt {
-                                    if let Some(ind) =
-                                        exprs.iter().position(|e| (*e.expr).kind == src_expr)
-                                    {
-                                        let left = ind.checked_sub(1);
-                                        let right = ind + 1;
-                                        let right = (right < exprs.len()).then_some(right);
+                                        if all_lt || all_gt {
+                                            if let Some(ind) = exprs
+                                                .iter()
+                                                .position(|e| (*e.expr).kind == src_expr)
+                                            {
+                                                let left = ind.checked_sub(1);
+                                                let right = ind + 1;
+                                                let right = (right < exprs.len()).then_some(right);
 
-                                        let [left, right]: [Option<Numbers>; 2] = [left, right]
-                                            .map(|i| {
-                                                i.map(|i| {
-                                                    self.context
-                                                        .evaluate(&exprs[i])
-                                                        .try_into()
-                                                        .unwrap()
-                                                })
-                                            });
+                                                let [left, right]: [Option<Numbers>; 2] =
+                                                    [left, right].map(|i| {
+                                                        i.map(|i| {
+                                                            self.context
+                                                                .evaluate(&exprs[i])
+                                                                .try_into()
+                                                                .unwrap()
+                                                        })
+                                                    });
 
-                                        return (
-                                            if all_lt {
-                                                (left, right)
-                                            } else if all_gt {
-                                                (right, left)
-                                            } else {
-                                                unreachable!()
-                                            },
-                                            first,
-                                        );
+                                                return (
+                                                    if all_lt {
+                                                        (left, right)
+                                                    } else if all_gt {
+                                                        (right, left)
+                                                    } else {
+                                                        unreachable!()
+                                                    },
+                                                    first,
+                                                );
+                                            }
+                                        }
                                     }
                                 }
                             }

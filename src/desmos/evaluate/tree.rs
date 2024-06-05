@@ -8,7 +8,7 @@ use std::sync::{atomic, OnceLock};
 use crate::desmos::evaluate::constness::CanConst;
 use crate::desmos::evaluate::context::{Functions, ValueContext};
 use crate::desmos::evaluate::pervasive_applies::{
-    pervasive_apply_comp_variadic_bool, pervasive_apply_known,
+    pervasive_apply_bool_variadic_bool, pervasive_apply_comp_variadic_bool, pervasive_apply_known,
 };
 use crate::desmos::evaluate::{
     pervasive_apply_variadic, Evaluable, IDENTIFIERS, POOL_INDICES, POOL_NUMBER, POOL_POINT,
@@ -675,7 +675,13 @@ pub struct VarDef {
 }
 
 #[derive(PartialEq, Debug)]
-pub enum Conditional {
+pub struct Conditional {
+    pub id: Id,
+    pub conds: Vec<OneConditional>,
+}
+
+#[derive(PartialEq, Debug)]
+pub enum OneConditional {
     Inequality {
         id: Id,
         comp: Vec<InequalityType>,
@@ -712,6 +718,23 @@ fn to_f64(b: bool) -> f64 {
     }
 }
 
+impl CondOutput {
+    pub fn len(&self) -> Option<usize> {
+        if let Self::List(lst) = self {
+            Some(lst.len())
+        } else {
+            None
+        }
+    }
+
+    pub fn get(&self, index: usize) -> bool {
+        match self {
+            &CondOutput::Prim(x) => x,
+            CondOutput::List(xs) => xs[index],
+        }
+    }
+}
+
 impl From<CondOutput> for Computable {
     fn from(value: CondOutput) -> Self {
         match value {
@@ -730,19 +753,29 @@ impl From<CondOutput> for VarValue {
     }
 }
 
-impl From<Result<bool, PooledVec<bool>>> for CondOutput {
-    fn from(value: Result<bool, PooledVec<bool>>) -> Self {
-        match value {
-            Ok(b) => Self::Prim(b),
-            Err(bs) => Self::List(bs),
-        }
+impl Conditional {
+    pub fn evaluate(&self, functions: &Functions, context: &mut ValueContext) -> CondOutput {
+        let items = self
+            .conds
+            .iter()
+            .map(|cond| cond.evaluate(functions, context))
+            .collect::<Vec<_>>();
+
+        pervasive_apply_bool_variadic_bool(self.id, items, |bools| {
+            for x in bools {
+                if x {
+                    return true;
+                }
+            }
+            false
+        })
     }
 }
 
-impl Conditional {
+impl OneConditional {
     pub fn evaluate(&self, functions: &Functions, context: &mut ValueContext) -> CondOutput {
         match self {
-            Conditional::Inequality { id, exprs, comp } => {
+            OneConditional::Inequality { id, exprs, comp } => {
                 if exprs.is_empty() {
                     unreachable!("Inequality cannot have zero expressions");
                 }
@@ -773,7 +806,7 @@ impl Conditional {
 
                 result
             }
-            Conditional::Equality { id, exprs } => {
+            OneConditional::Equality { id, exprs } => {
                 if exprs.is_empty() {
                     unreachable!("Equality cannot have zero expressions");
                 }

@@ -592,8 +592,6 @@ pub fn convert_cells(stmts: Vec<DesmosCell>) -> (AllContext, Statements<'static>
         }
     }
 
-    println!("{:?}", IDENTIFIERS.idents);
-
     let indices = topological_sort(
         var_defs
             .iter()

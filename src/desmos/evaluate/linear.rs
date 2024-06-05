@@ -1,7 +1,7 @@
 pub use value::*;
 
 use crate::desmos::evaluate::constness::CanConst;
-use crate::desmos::evaluate::{Conditional, EvalExpr, EvalKind};
+use crate::desmos::evaluate::{Conditional, EvalExpr, EvalKind, OneConditional};
 use crate::desmos::parsing::AddOrSub;
 
 mod value;
@@ -121,8 +121,12 @@ impl CanLinear for EvalKind {
         }
 
         fn cond_evaluate(cond: &Conditional) -> bool {
+            cond.conds.iter().any(one_cond_evaluate)
+        }
+
+        fn one_cond_evaluate(cond: &OneConditional) -> bool {
             match cond {
-                Conditional::Inequality { id: _, exprs, comp } => {
+                OneConditional::Inequality { id: _, exprs, comp } => {
                     let values: Vec<_> = exprs.iter().map(expr_const_eval).collect();
                     for (vals, comp) in values.windows(2).zip(comp.iter()) {
                         let [x, y] = [0, 1].map(|i| vals[i]);
@@ -132,7 +136,7 @@ impl CanLinear for EvalKind {
                     }
                     true
                 }
-                Conditional::Equality { exprs, id: _ } => {
+                OneConditional::Equality { exprs, id: _ } => {
                     let values: Vec<_> = exprs.iter().map(expr_const_eval).collect();
                     for vals in values.windows(2) {
                         let [x, y] = [0, 1].map(|i| vals[i]);

@@ -103,6 +103,10 @@ impl Parser {
                 | Token::Punct(Punctuation::For)
                 | Token::Punct(Punctuation::Prime)
                 | Token::Punct(Punctuation::Ellipsis)
+                | Token::Punct(Punctuation::MoreThan)
+                | Token::Punct(Punctuation::MoreOrEqual)
+                | Token::Punct(Punctuation::LessThan)
+                | Token::Punct(Punctuation::LessOrEqual)
         )
     }
 
@@ -242,6 +246,22 @@ impl Parser {
     }
 
     fn parse_conditional(&mut self) -> Option<Conditional> {
+        let mut conds = Vec::new();
+
+        let data = self.data.guard_denied();
+        push_repeats!(
+            self.parse_one_conditional(),
+            from data to conds,
+            seperated by &Token::Punct(Punctuation::Comma)
+        );
+
+        (!conds.is_empty()).then(|| {
+            data.accepted();
+            Conditional { conds }
+        })
+    }
+
+    fn parse_one_conditional(&mut self) -> Option<OneConditional> {
         log!("parsing conditional");
         log!("status: {:?}", self.data);
         let data = self.data.guard_denied();
@@ -257,7 +277,7 @@ impl Parser {
                 }
 
                 data.accepted();
-                Some(Conditional::Equality(Equality { exprs }))
+                Some(OneConditional::Equality(Equality { exprs }))
             }
             Token::Punct(Punctuation::LessThan)
             | Token::Punct(Punctuation::MoreThan)
@@ -277,7 +297,7 @@ impl Parser {
                 }
 
                 data.accepted();
-                Some(Conditional::Inequality(Inequality { exprs, kinds }))
+                Some(OneConditional::Inequality(Inequality { exprs, kinds }))
             }
             _ => None,
         }
@@ -418,25 +438,91 @@ impl Parser {
                 Some(EverythingElse::List(list))
             }
             Token::Punct(Punctuation::LeftCurly) => {
-                let cond = self.parse_conditional()?;
+                #[derive(Copy, Clone)]
+                enum EndCase {
+                    None,
+                    Comma,
+                    NoComma,
+                    NoColon,
+                }
 
-                let branches = data
-                    .advance_if_eq(&Token::Punct(Punctuation::Colon))
-                    .then(|| {
+                let mut conditionals = Vec::new();
+                let mut trues = Vec::new();
+                let mut end_case = EndCase::None;
+
+                while let Some(conditional) = self.parse_conditional() {
+                    conditionals.push(conditional);
+
+                    if data.advance_if_eq(&Token::Punct(Punctuation::Colon)) {
                         let yes = self.parse_expression()?;
+                        trues.push(yes);
+                        if data.advance_if_eq(&Token::Punct(Punctuation::Comma)) {
+                            end_case = EndCase::Comma;
+                        } else {
+                            end_case = EndCase::NoComma;
+                            break;
+                        }
+                    } else {
+                        end_case = EndCase::NoColon;
+                        break;
+                    }
+                }
 
-                        let no = data
-                            .advance_if_eq(&Token::Punct(Punctuation::Comma))
-                            .then(|| self.parse_expression())
-                            .flatten();
+                fn add_pairs(
+                    start: IfElse,
+                    pairs: impl Iterator<Item = (Conditional, Expression)>,
+                ) -> IfElse {
+                    let mut result = start;
 
-                        Some(IfElseBranches { yes, no })
-                    })
-                    .flatten();
+                    for (cond, yes) in pairs {
+                        result = IfElse {
+                            cond,
+                            branches: Some(IfElseBranches {
+                                yes,
+                                no: Some(Expression {
+                                    expr: Box::new(Everything::Below(MultiplyOrBelow::Below(
+                                        PostfixOrBelow::Below(EverythingElse::IfElse(result)),
+                                    ))),
+                                }),
+                            }),
+                        }
+                    }
 
-                data.eq_else_none(&Token::Punct(Punctuation::RightCurly))?;
-                data.accepted();
-                Some(EverythingElse::IfElse(IfElse { cond, branches }))
+                    result
+                }
+
+                match end_case {
+                    EndCase::Comma | EndCase::NoComma => {
+                        let no = match end_case {
+                            EndCase::Comma => Some(self.parse_expression()?),
+                            EndCase::NoComma => {
+                                if data.advance_if_eq(&Token::Punct(Punctuation::Comma)) {
+                                    Some(self.parse_expression()?)
+                                } else {
+                                    None
+                                }
+                            }
+                            _ => unreachable!("Match statement above forces choices."),
+                        };
+
+                        data.eq_else_none(&Token::Punct(Punctuation::RightCurly))?;
+
+                        let mut pairs = conditionals.into_iter().zip(trues).rev();
+                        if let Some((cond, yes)) = pairs.next() {
+                            let if_else = IfElse {
+                                cond,
+                                branches: Some(IfElseBranches { yes, no }),
+                            };
+
+                            data.accepted();
+                            Some(EverythingElse::IfElse(add_pairs(if_else, pairs)))
+                        } else {
+                            None
+                        }
+                    }
+                    EndCase::NoColon => None,
+                    EndCase::None => None,
+                }
             }
             Token::Punct(Punctuation::LeftAbs) => {
                 let expr = self.parse_expression()?;
@@ -473,29 +559,6 @@ impl Parser {
                     Some(EverythingElse::Fraction(Fraction { top, bottom }))
                 }
             }
-            // Token::Punct(Punctuation::Frac) => {
-            //     let success = Some(())
-            //         .and_then(|_| data.eq_else_none(&Token::Punct(Punctuation::LeftLatexCurly)))
-            //         .and_then(|_| data.eq_else_none(&Token::Identifier("d".to_string())))
-            //         .and_then(|_| data.eq_else_none(&Token::Punct(Punctuation::RightLatexCurly)))
-            //         .and_then(|_| data.eq_else_none(&Token::Punct(Punctuation::LeftLatexCurly)))
-            //         .and_then(|_| data.eq_else_none(&Token::Identifier("dx".to_string())))
-            //         .and_then(|_| data.eq_else_none(&Token::Punct(Punctuation::RightLatexCurly)))
-            //         .is_some();
-            //
-            //     if success {
-            //         let expr = self.parse_multiply()?;
-            //
-            //         data.accepted();
-            //         Some(PrefixOrBelow::Differentiate(Differentiate { expr }))
-            //     } else {
-            //         data.denied();
-            //         drop(data);
-            //
-            //         let mult = self.parse_multiply()?;
-            //         Some(PrefixOrBelow::Below(mult))
-            //     }
-            // }
             Token::Punct(Punctuation::Sum) | Token::Punct(Punctuation::Prod) => {
                 let kind = match next {
                     Token::Punct(Punctuation::Sum) => SumOrProduct::Sum,

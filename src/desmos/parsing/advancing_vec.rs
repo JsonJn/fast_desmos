@@ -2,6 +2,7 @@
 
 use std::cell::Cell;
 use std::fmt::{Debug, Display, Formatter};
+use std::panic::Location;
 use std::ptr::addr_of;
 #[cfg(feature = "log")]
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -327,8 +328,16 @@ impl<T: Debug> Drop for AdvGuard<T> {
 }
 
 impl<T: PartialEq + Debug> AdvGuard<T> {
+    #[track_caller]
     pub fn advance_if_eq(&self, val: &T) -> bool {
         let result = self.advance_if(|v| v == val);
+        let _caller = Location::caller();
+        log!(
+            "CALLED MATCH at {}:{}:{}:",
+            _caller.file(),
+            _caller.line(),
+            _caller.column()
+        );
         if result {
             log!("MATCHED successfully: {val:?}");
         } else {

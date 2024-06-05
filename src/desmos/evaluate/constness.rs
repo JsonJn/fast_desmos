@@ -1,4 +1,6 @@
-use crate::desmos::evaluate::{Builtins, Conditional, EvalExpr, EvalKind, EvalTree, Ident, VarDef};
+use crate::desmos::evaluate::{
+    Builtins, Conditional, EvalExpr, EvalKind, EvalTree, Ident, OneConditional, VarDef,
+};
 use crate::vecs::{iter_concat, vec_concat};
 
 pub trait CanConst {
@@ -66,27 +68,40 @@ impl CanConst for Ident {
     }
 }
 
-impl CanConst for Conditional {
+impl CanConst for OneConditional {
     fn is_const(&self) -> bool {
         match self {
-            Conditional::Inequality {
+            OneConditional::Inequality {
                 id: _,
                 exprs,
                 comp: _,
             } => exprs.is_const(),
-            Conditional::Equality { id: _, exprs } => exprs.is_const(),
+            OneConditional::Equality { id: _, exprs } => exprs.is_const(),
         }
     }
 
     fn get_const_deps(&self) -> Vec<usize> {
         match self {
-            Conditional::Inequality {
+            OneConditional::Inequality {
                 id: _,
                 exprs,
                 comp: _,
             } => exprs.get_const_deps(),
-            Conditional::Equality { id: _, exprs } => exprs.get_const_deps(),
+            OneConditional::Equality { id: _, exprs } => exprs.get_const_deps(),
         }
+    }
+}
+
+impl CanConst for Conditional {
+    fn is_const(&self) -> bool {
+        self.conds.iter().all(CanConst::is_const)
+    }
+
+    fn get_const_deps(&self) -> Vec<usize> {
+        self.conds
+            .iter()
+            .flat_map(CanConst::get_const_deps)
+            .collect()
     }
 }
 

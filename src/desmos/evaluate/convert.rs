@@ -1,5 +1,6 @@
 use once_cell::sync::Lazy;
 use std::sync::atomic;
+use std::sync::atomic::Ordering;
 
 pub use identifiers::IdentifierStorer;
 
@@ -83,7 +84,7 @@ impl ToEval for PostfixOrBelow {
             }
             PostfixOrBelow::Filtering(ListFiltering { filter, list }) => {
                 EvalExpr::new_generated(EvalKind::ListFiltering {
-                    filter: convert_cond(filter),
+                    filter: filter.into(),
                     list: list.to_eval(),
                 })
             }
@@ -99,18 +100,21 @@ impl ToEval for PostfixOrBelow {
 
 impl From<parsing::Conditional> for tree::Conditional {
     fn from(value: parsing::Conditional) -> Self {
-        convert_cond(value)
+        Self {
+            id: Id::new(NEXT_ID.fetch_add(1, Ordering::Relaxed)),
+            conds: value.conds.into_iter().map(convert_one_cond).collect(),
+        }
     }
 }
 
-fn convert_cond(filter: parsing::Conditional) -> tree::Conditional {
+fn convert_one_cond(filter: parsing::OneConditional) -> tree::OneConditional {
     match filter {
-        parsing::Conditional::Equality(Equality { exprs }) => tree::Conditional::Equality {
+        parsing::OneConditional::Equality(Equality { exprs }) => tree::OneConditional::Equality {
             id: Id::new(NEXT_ID.fetch_add(1, atomic::Ordering::Relaxed)),
             exprs: exprs.into_iter().map(ToEval::to_eval).collect(),
         },
-        parsing::Conditional::Inequality(Inequality { exprs, kinds }) => {
-            tree::Conditional::Inequality {
+        parsing::OneConditional::Inequality(Inequality { exprs, kinds }) => {
+            tree::OneConditional::Inequality {
                 id: Id::new(NEXT_ID.fetch_add(1, atomic::Ordering::Relaxed)),
                 comp: kinds,
                 exprs: exprs.into_iter().map(ToEval::to_eval).collect(),
@@ -156,7 +160,7 @@ impl ToEval for EverythingElse {
                 };
 
                 EvalExpr::new_generated(EvalKind::IfElse {
-                    cond: convert_cond(cond),
+                    cond: cond.into(),
                     yes,
                     no,
                 })

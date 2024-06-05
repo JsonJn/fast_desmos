@@ -1,5 +1,5 @@
 use crate::desmos::evaluate::{
-    Conditional, EvalExpr, EvalKind, EvalTree, Ident, UserIdent, VarDef,
+    Conditional, EvalExpr, EvalKind, EvalTree, Ident, OneConditional, UserIdent, VarDef,
 };
 use crate::desmos::execute::actions::{ActExpr, ActIdent, ActTree};
 use crate::vecs::{iter_concat, vec_concat};
@@ -28,13 +28,19 @@ impl CanDepend for VarDef {
 
 impl CanDepend for Conditional {
     fn get_deps(&self) -> Vec<usize> {
+        self.conds.iter().flat_map(|cond| cond.get_deps()).collect()
+    }
+}
+
+impl CanDepend for OneConditional {
+    fn get_deps(&self) -> Vec<usize> {
         match self {
-            Conditional::Inequality {
+            OneConditional::Inequality {
                 id: _,
                 exprs,
                 comp: _,
             } => exprs,
-            Conditional::Equality { id: _, exprs } => exprs,
+            OneConditional::Equality { id: _, exprs } => exprs,
         }
         .get_deps()
     }

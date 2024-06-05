@@ -27,8 +27,8 @@ macro_rules! strings {
 
 fn main() {
     // use desmos::parsing::{Lexer, Parser};
-    // let raw = r#"R_{x}=[0.000000,0.850651,0.850651,-0.850651,-0.850651,-0.525731,0.525731,0.525731,-0.525731,0.000000,0.000000,0.000000]"#.to_string();
-    // let (lexed, left) = Lexer::lex(raw).unwrap();
+    // let raw = r#"\left\{a_{0}>b_{0}:\left[\right],\left[a_{0}...b_{0}\right]\right\}"#.to_string();
+    // let (lexed, _left) = Lexer::lex(raw).unwrap();
     // let parsed = Parser::parse(lexed).unwrap();
     // println!("{parsed:#?}");
     // return;
@@ -72,7 +72,7 @@ fn main() {
         D20 = "https://www.desmos.com/calculator/y0s6d3xy4t";
     }
 
-    let desmos = DesmosPage::from_url(GRAVITY_IDEAL_GAS).unwrap();
+    let desmos = DesmosPage::from_url(SPECIAL_CONNECT_4).unwrap();
     desmos::rendering::window(desmos);
 
     // println!("{:?}", size_of::<EvalTree>());

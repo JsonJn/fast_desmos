@@ -131,7 +131,12 @@ pub struct IfElseBranches {
 }
 
 #[derive(Debug, Clone)]
-pub enum Conditional {
+pub struct Conditional {
+    pub conds: Vec<OneConditional>,
+}
+
+#[derive(Debug, Clone)]
+pub enum OneConditional {
     Equality(Equality),
     Inequality(Inequality),
 }

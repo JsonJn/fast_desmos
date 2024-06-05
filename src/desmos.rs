@@ -223,11 +223,11 @@ fn parse_expr_v_option(s: &serde_json::Value) -> Option<EvalExpr> {
 
 fn parse_stmt_v(s: &serde_json::Value) -> Statement {
     let string = s.as_str().unwrap().to_string();
-    if string.len() < 1000 {
-        println!("{string}");
-    } else {
-        println!("too long!");
-    }
+    // if string.len() < 1000 {
+    //     println!("{string}");
+    // } else {
+    //     println!("too long!");
+    // }
     // println!("{string}");
     let (lexed, _) = Lexer::lex(string).expect("Statement lexing failed!");
     // println!("{lexed:?}");
@@ -236,7 +236,7 @@ fn parse_stmt_v(s: &serde_json::Value) -> Statement {
 
 fn parse_act_expr(s: &serde_json::Value) -> ActExpr {
     let s = s.as_str().unwrap().to_string();
-    println!("{s:?}");
+    // println!("{s:?}");
     Parser::parse_action_expr(Lexer::lex(s).unwrap().0)
         .expect("ActExpr parsing failed!")
         .to_act_expr()
@@ -396,7 +396,7 @@ impl DesmosPage {
 
                     let clickable = expr.get("clickableInfo").and_then(|v| {
                         let clickable = v.as_object().unwrap();
-                        println!("{clickable:?}");
+                        // println!("{clickable:?}");
                         Some(Clickable {
                             expr: parse_act_expr(clickable.get("latex")?),
                         })
