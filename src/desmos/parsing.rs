@@ -1,7 +1,10 @@
-use crate::log;
+use eyre::{eyre, ContextCompat, Result};
+
 use advancing_vec::AdvVec;
 pub use lexing::*;
 pub use tree::*;
+
+use crate::log;
 
 mod advancing_vec;
 pub mod lexing;
@@ -9,7 +12,7 @@ mod tree;
 
 macro_rules! push_repeats {
     ($parse: expr, from $data: ident to $target: ident, seperated by $token: expr ) => {
-        while let Some(item) = $parse {
+        while let Ok(item) = $parse {
             $target.push(item);
             if !$data.advance_if_eq($token) {
                 break;
@@ -18,7 +21,7 @@ macro_rules! push_repeats {
     };
 
     ($parse: expr, from $data: ident to $target: ident, must be seperated by $token: expr ) => {
-        if let Some(item) = $parse {
+        if let Ok(item) = $parse {
             $target.push(item);
         }
 
@@ -53,12 +56,12 @@ macro_rules! log {
 macro_rules! return_if_cond {
     (
         with me $self: ident:
-        if let Some($id: ident) = $expr: expr;
+        if let Ok($id: ident) = $expr: expr;
         and $cond: expr;
         return $ret: expr;
     ) => {
         let _guard = $self.data.guard_denied();
-        if let Some($id) = $expr {
+        if let Ok($id) = $expr {
             if $cond {
                 _guard.accepted();
                 return $ret;
@@ -69,14 +72,14 @@ macro_rules! return_if_cond {
 
     (
         with me $self: ident:
-        if let Some($id: ident) = $expr: expr;
+        if let Ok($id: ident) = $expr: expr;
         and $cond: expr;
         return some $ret: expr;
     ) => {
         let _guard = $self.data.guard_denied();
-        if let Some($id) = $expr {
+        if let Ok($id) = $expr {
             if $cond {
-                return Some($ret($id));
+                return Ok($ret($id));
             }
         }
         drop(_guard);
@@ -86,6 +89,8 @@ macro_rules! return_if_cond {
 pub struct Parser {
     data: AdvVec<Token>,
 }
+
+const NO_TOKENS_LEFT: &'static str = "No tokens left";
 
 impl Parser {
     const fn is_skip_token(token: &Token) -> bool {
@@ -110,19 +115,19 @@ impl Parser {
         )
     }
 
-    pub fn parse(tokens: Vec<Token>) -> Option<Statement> {
+    pub fn parse(tokens: Vec<Token>) -> Result<Statement> {
         let mut parser = Self::new(tokens);
         // println!("\nENDING STATE: {}\n", parser.data);
         parser.parse_statement()
     }
 
-    pub fn parse_expr(tokens: Vec<Token>) -> Option<Expression> {
+    pub fn parse_expr(tokens: Vec<Token>) -> Result<Expression> {
         let mut parser = Self::new(tokens);
         // println!("\nENDING STATE: {}\n", parser.data);
         parser.parse_expression()
     }
 
-    pub fn parse_action_expr(tokens: Vec<Token>) -> Option<ActExpr> {
+    pub fn parse_action_expr(tokens: Vec<Token>) -> Result<ActExpr> {
         let mut parser = Self::new(tokens);
         parser.parse_act_expr()
     }
@@ -133,7 +138,7 @@ impl Parser {
         }
     }
 
-    fn parse_statement(&mut self) -> Option<Statement> {
+    fn parse_statement(&mut self) -> Result<Statement> {
         log!("parsing statement");
         log!("status: {:?}", self.data);
 
@@ -141,77 +146,80 @@ impl Parser {
 
         return_if_cond!(
             with me self:
-            if let Some(def) = self.parse_function_def();
+            if let Ok(def) = self.parse_function_def();
             and self.data.is_done();
             return some Statement::Function;
         );
         return_if_cond!(
             with me self:
-            if let Some(def) = self.parse_act_func_def();
+            if let Ok(def) = self.parse_act_func_def();
             and self.data.is_done();
             return some Statement::ActFunction;
         );
         return_if_cond!(
             with me self:
-            if let Some(def) = self.parse_variable_def();
+            if let Ok(def) = self.parse_variable_def();
             and self.data.is_done();
             return some Statement::Variable;
         );
         return_if_cond!(
             with me self:
-            if let Some(def) = self.parse_act_var_def();
+            if let Ok(def) = self.parse_act_var_def();
             and self.data.is_done();
             return some Statement::ActVar;
         );
         return_if_cond!(
             with me self:
-            if let Some(def) = self.parse_expression();
+            if let Ok(def) = self.parse_expression();
             and self.data.is_done();
             return some Statement::Expression;
         );
         return_if_cond!(
             with me self:
-            if let Some(def) = self.parse_act_expr();
+            if let Ok(def) = self.parse_act_expr();
             and self.data.is_done();
             return some Statement::ActExpr;
         );
 
         guard.denied();
-        None
+        Err(eyre!("No match for anything"))
     }
 
-    fn parse_ident(&mut self) -> Option<Ident> {
-        if let Some(Token::Identifier(s)) = unsafe { self.data.peek() } {
+    fn parse_ident(&mut self) -> Result<Ident> {
+        let next = unsafe { self.data.peek() };
+        if let Some(Token::Identifier(s)) = next {
             unsafe {
                 self.data.advance();
             }
             log!("SUCCESS: Identifier parsed");
-            Some(Ident(s.clone()))
+            Ok(Ident(s.clone()))
         } else {
             log!("NO IDENTIFIER");
-            None
+            Err(eyre!("Not an identifier: {next:?}"))
         }
     }
 
-    fn parse_number(&mut self) -> Option<Number> {
+    fn parse_number(&mut self) -> Result<Number> {
         log!("parsing number");
         log!("status: {:?}", self.data);
         let guard = self.data.guard_denied();
-        let next = guard.advance()?;
+        let next = guard.advance().wrap_err(NO_TOKENS_LEFT)?;
         if let Token::Number(n) = next {
             guard.accepted();
-            Some(Number(*n))
+            Ok(Number(*n))
         } else {
-            None
+            Err(eyre!("Not a number: {next:?}"))
         }
     }
 
-    fn parse_function_def(&mut self) -> Option<FunctionDef> {
+    fn parse_function_def(&mut self) -> Result<FunctionDef> {
         log!("parsing function_def");
         log!("status: {:?}", self.data);
         let guard = self.data.guard_denied();
         let name = self.parse_ident()?;
-        guard.eq_else_none(&Token::Punct(Punctuation::LeftParen))?;
+        guard
+            .eq_else_none(&Token::Punct(Punctuation::LeftParen))
+            .wrap_err("No bracket for function definition")?;
 
         let mut params = Vec::new();
 
@@ -221,31 +229,37 @@ impl Parser {
             seperated by &Token::Punct(Punctuation::Comma)
         );
 
-        guard.eq_else_none(&Token::Punct(Punctuation::RightParen))?;
-        guard.eq_else_none(&Token::Punct(Punctuation::Equals))?;
+        guard
+            .eq_else_none(&Token::Punct(Punctuation::RightParen))
+            .wrap_err("Function param bracket no closed")?;
+        guard
+            .eq_else_none(&Token::Punct(Punctuation::Equals))
+            .wrap_err("Missing equals for function def")?;
 
         let expr = self.parse_expression()?;
 
         guard.accepted();
-        Some(FunctionDef {
+        Ok(FunctionDef {
             func: name,
             params,
             expr,
         })
     }
 
-    fn parse_variable_def(&mut self) -> Option<VariableDef> {
+    fn parse_variable_def(&mut self) -> Result<VariableDef> {
         log!("parsing variable_def");
         log!("status: {:?}", self.data);
         let guard = self.data.guard_denied();
         let ident = self.parse_ident()?;
-        guard.eq_else_none(&Token::Punct(Punctuation::Equals))?;
+        guard
+            .eq_else_none(&Token::Punct(Punctuation::Equals))
+            .wrap_err("Missing equals for variable def")?;
         let expr = self.parse_expression()?;
         guard.accepted();
-        Some(VariableDef { ident, expr })
+        Ok(VariableDef { ident, expr })
     }
 
-    fn parse_conditional(&mut self) -> Option<Conditional> {
+    fn parse_conditional(&mut self) -> Result<Conditional> {
         let mut conds = Vec::new();
 
         let data = self.data.guard_denied();
@@ -255,19 +269,21 @@ impl Parser {
             seperated by &Token::Punct(Punctuation::Comma)
         );
 
-        (!conds.is_empty()).then(|| {
-            data.accepted();
-            Conditional { conds }
-        })
+        (!conds.is_empty())
+            .then(|| {
+                data.accepted();
+                Conditional { conds }
+            })
+            .wrap_err("No conditionals were parsed")
     }
 
-    fn parse_one_conditional(&mut self) -> Option<OneConditional> {
+    fn parse_one_conditional(&mut self) -> Result<OneConditional> {
         log!("parsing conditional");
         log!("status: {:?}", self.data);
         let data = self.data.guard_denied();
 
         let expr = self.parse_expression()?;
-        let next = data.peek()?;
+        let next = data.peek().wrap_err(NO_TOKENS_LEFT)?;
         match next {
             Token::Punct(Punctuation::Equals) => {
                 let mut exprs = vec![expr];
@@ -277,7 +293,7 @@ impl Parser {
                 }
 
                 data.accepted();
-                Some(OneConditional::Equality(Equality { exprs }))
+                Ok(OneConditional::Equality(Equality { exprs }))
             }
             Token::Punct(Punctuation::LessThan)
             | Token::Punct(Punctuation::MoreThan)
@@ -297,38 +313,40 @@ impl Parser {
                 }
 
                 data.accepted();
-                Some(OneConditional::Inequality(Inequality { exprs, kinds }))
+                Ok(OneConditional::Inequality(Inequality { exprs, kinds }))
             }
-            _ => None,
+            _tok => Err(eyre!("Unknown token for comparison: {_tok:?}")),
         }
     }
 
-    fn parse_latex_grouping(&mut self) -> Option<Expression> {
+    fn parse_latex_grouping(&mut self) -> Result<Expression> {
         log!("parsing latex_grouping");
         log!("status: {:?}", self.data);
         log!("Starting latex!");
         let data = self.data.guard_denied();
-        data.eq_else_none(&Token::Punct(Punctuation::LeftLatexCurly))?;
+        data.eq_else_none(&Token::Punct(Punctuation::LeftLatexCurly))
+            .wrap_err("No left brace for latex grouping")?;
         let expr = self.parse_expression()?;
         log!("expr: {expr:?}");
         log!("state: {:?}", self.data);
-        data.eq_else_none(&Token::Punct(Punctuation::RightLatexCurly))?;
+        data.eq_else_none(&Token::Punct(Punctuation::RightLatexCurly))
+            .wrap_err("No right brace for latex grouping")?;
         data.accepted();
         log!("Latex SUCCESS!");
-        Some(expr)
+        Ok(expr)
     }
 
-    fn parse_list_contents(&mut self) -> Option<ListContents> {
+    fn parse_list_contents(&mut self) -> Result<ListContents> {
         log!("parsing list_contents");
         log!("status: {:?}", self.data);
 
         if unsafe { self.data.peek() } == Some(&Token::Punct(Punctuation::RightSquare)) {
-            return Some(ListContents::Literal(ListLiteral { parts: vec![] }));
+            return Ok(ListContents::Literal(ListLiteral { parts: vec![] }));
         }
 
         let data = self.data.guard_denied();
         let first_expr = self.parse_expression()?;
-        let next = data.advance()?;
+        let next = data.advance().wrap_err(NO_TOKENS_LEFT)?;
         if let Token::Punct(Punctuation::For) = next {
             let mut statements = Vec::new();
 
@@ -339,14 +357,14 @@ impl Parser {
             );
 
             data.accepted();
-            Some(ListContents::Comprehension(ListComprehension {
+            Ok(ListContents::Comprehension(ListComprehension {
                 expr: first_expr,
                 statements,
             }))
         } else if let Token::Punct(Punctuation::RightSquare) = next {
             data.un_advance();
             data.accepted();
-            Some(ListContents::Literal(ListLiteral {
+            Ok(ListContents::Literal(ListLiteral {
                 parts: vec![first_expr],
             }))
         } else if let Token::Punct(Punctuation::Comma) = next {
@@ -359,12 +377,12 @@ impl Parser {
             );
 
             let restored = self.data.guard_accepted();
-            let next = data.advance()?;
+            let next = data.advance().wrap_err(NO_TOKENS_LEFT)?;
             if let Token::Punct(Punctuation::RightSquare) = next {
                 restored.denied();
                 drop(restored);
                 data.accepted();
-                Some(ListContents::Literal(ListLiteral { parts: exprs }))
+                Ok(ListContents::Literal(ListLiteral { parts: exprs }))
             } else if let Token::Punct(Punctuation::Ellipsis) = next {
                 data.advance_if_eq(&Token::Punct(Punctuation::Comma));
 
@@ -376,12 +394,12 @@ impl Parser {
                 );
 
                 data.accepted();
-                Some(ListContents::Range(ListRange {
+                Ok(ListContents::Range(ListRange {
                     before: exprs,
                     after: after_exprs,
                 }))
             } else {
-                None
+                Err(eyre!("Unknown token for ListContents: {next:?}"))
             }
         } else if let Token::Punct(Punctuation::Ellipsis) = next {
             data.advance_if_eq(&Token::Punct(Punctuation::Comma));
@@ -394,48 +412,50 @@ impl Parser {
             );
 
             data.accepted();
-            Some(ListContents::Range(ListRange {
+            Ok(ListContents::Range(ListRange {
                 before: vec![first_expr],
                 after: after_exprs,
             }))
         } else {
-            None
+            Err(eyre!("Unknown token for ListContents: {next:?}"))
         }
     }
 
-    fn parse_everything_else(&mut self) -> Option<EverythingElse> {
+    fn parse_everything_else(&mut self) -> Result<EverythingElse> {
         log!("parsing everything_else");
         log!("status: {:?}", self.data);
         let data = self.data.guard_denied();
-        let next = data.advance()?;
+        let next = data.advance().wrap_err(NO_TOKENS_LEFT)?;
         log!("first: {next:?}");
         match next {
             Token::Punct(Punctuation::LeftParen) => {
                 let first_expr = self.parse_expression()?;
-                match data.advance()? {
+                match data.advance().wrap_err(NO_TOKENS_LEFT)? {
                     Token::Punct(Punctuation::RightParen) => {
                         data.accepted();
-                        Some(EverythingElse::Grouping(Grouping { expr: first_expr }))
+                        Ok(EverythingElse::Grouping(Grouping { expr: first_expr }))
                     }
                     Token::Punct(Punctuation::Comma) => {
                         let second_expr = self.parse_expression()?;
 
-                        data.eq_else_none(&Token::Punct(Punctuation::RightParen))?;
+                        data.eq_else_none(&Token::Punct(Punctuation::RightParen))
+                            .wrap_err("Grouping not closed")?;
 
                         data.accepted();
-                        Some(EverythingElse::Point(Point {
+                        Ok(EverythingElse::Point(Point {
                             x: first_expr,
                             y: second_expr,
                         }))
                     }
-                    _ => None,
+                    _tok => Err(eyre!("Unknown token in parenthesis: {_tok:?}")),
                 }
             }
             Token::Punct(Punctuation::LeftSquare) => {
                 let list = self.parse_list_contents()?;
-                data.eq_else_none(&Token::Punct(Punctuation::RightSquare))?;
+                data.eq_else_none(&Token::Punct(Punctuation::RightSquare))
+                    .wrap_err("List not closed")?;
                 data.accepted();
-                Some(EverythingElse::List(list))
+                Ok(EverythingElse::List(list))
             }
             Token::Punct(Punctuation::LeftCurly) => {
                 #[derive(Copy, Clone)]
@@ -450,7 +470,7 @@ impl Parser {
                 let mut trues = Vec::new();
                 let mut end_case = EndCase::None;
 
-                while let Some(conditional) = self.parse_conditional() {
+                while let Ok(conditional) = self.parse_conditional() {
                     conditionals.push(conditional);
 
                     if data.advance_if_eq(&Token::Punct(Punctuation::Colon)) {
@@ -505,7 +525,8 @@ impl Parser {
                             _ => unreachable!("Match statement above forces choices."),
                         };
 
-                        data.eq_else_none(&Token::Punct(Punctuation::RightCurly))?;
+                        data.eq_else_none(&Token::Punct(Punctuation::RightCurly))
+                            .wrap_err("If-else not closed")?;
 
                         let mut pairs = conditionals.into_iter().zip(trues).rev();
                         if let Some((cond, yes)) = pairs.next() {
@@ -515,20 +536,33 @@ impl Parser {
                             };
 
                             data.accepted();
-                            Some(EverythingElse::IfElse(add_pairs(if_else, pairs)))
+                            Ok(EverythingElse::IfElse(add_pairs(if_else, pairs)))
                         } else {
-                            None
+                            Err(eyre!("No conditionals were parsed"))
                         }
                     }
-                    EndCase::NoColon => None,
-                    EndCase::None => None,
+                    EndCase::NoColon => {
+                        data.eq_else_none(&Token::Punct(Punctuation::RightCurly))
+                            .wrap_err("If-else not closed")?;
+
+                        let mut conds = conditionals.into_iter();
+                        let no = IfElse {
+                            cond: conds.next_back().unwrap(),
+                            branches: None,
+                        };
+                        let pairs = conds.zip(trues).rev();
+                        data.accepted();
+                        Ok(EverythingElse::IfElse(add_pairs(no, pairs)))
+                    }
+                    EndCase::None => Err(eyre!("No conditionals were parsed")),
                 }
             }
             Token::Punct(Punctuation::LeftAbs) => {
                 let expr = self.parse_expression()?;
-                data.eq_else_none(&Token::Punct(Punctuation::RightAbs))?;
+                data.eq_else_none(&Token::Punct(Punctuation::RightAbs))
+                    .wrap_err("Abs not closed")?;
                 data.accepted();
-                Some(EverythingElse::Abs(AbsoluteValue { expr }))
+                Ok(EverythingElse::Abs(AbsoluteValue { expr }))
             }
             Token::Punct(Punctuation::Frac) => {
                 let success_guard = self.data.guard_denied();
@@ -549,14 +583,14 @@ impl Parser {
                     let expr = self.parse_multiply()?;
 
                     data.accepted();
-                    Some(EverythingElse::Differentiate(Differentiate {
+                    Ok(EverythingElse::Differentiate(Differentiate {
                         expr: Box::new(expr),
                     }))
                 } else {
                     let top = self.parse_latex_grouping()?;
                     let bottom = self.parse_latex_grouping()?;
                     data.accepted();
-                    Some(EverythingElse::Fraction(Fraction { top, bottom }))
+                    Ok(EverythingElse::Fraction(Fraction { top, bottom }))
                 }
             }
             Token::Punct(Punctuation::Sum) | Token::Punct(Punctuation::Prod) => {
@@ -566,22 +600,26 @@ impl Parser {
                     _ => unreachable!(),
                 };
 
-                data.eq_else_none(&Token::Punct(Punctuation::Subscript))?;
-                data.eq_else_none(&Token::Punct(Punctuation::LeftLatexCurly))?;
+                data.eq_else_none(&Token::Punct(Punctuation::Subscript))
+                    .wrap_err("SumProd missing counter def")?;
+                data.eq_else_none(&Token::Punct(Punctuation::LeftLatexCurly))
+                    .wrap_err("SumProd missing counter def")?;
                 let VariableDef {
                     ident: counter,
                     expr: from,
                 } = self.parse_variable_def()?;
-                data.eq_else_none(&Token::Punct(Punctuation::RightLatexCurly))?;
+                data.eq_else_none(&Token::Punct(Punctuation::RightLatexCurly))
+                    .wrap_err("SumProd counter def not closed")?;
 
-                data.eq_else_none(&Token::Punct(Punctuation::Exp))?;
+                data.eq_else_none(&Token::Punct(Punctuation::Exp))
+                    .wrap_err("SumProd missing upper bound")?;
                 let to = self.parse_latex_grouping()?;
 
                 let expr = self.parse_multiply()?;
 
                 data.accepted();
                 // None
-                Some(EverythingElse::SumProd(SumProd {
+                Ok(EverythingElse::SumProd(SumProd {
                     kind,
                     expr: Box::new(expr),
                     counter,
@@ -592,7 +630,8 @@ impl Parser {
             Token::Punct(Punctuation::Sqrt) => {
                 let nth = if data.advance_if_eq(&Token::Punct(Punctuation::LeftLatexSquare)) {
                     let root = self.parse_number()?;
-                    data.eq_else_none(&Token::Punct(Punctuation::RightLatexSquare))?;
+                    data.eq_else_none(&Token::Punct(Punctuation::RightLatexSquare))
+                        .wrap_err("Sqrt not closed")?;
                     root.0
                 } else {
                     2.0
@@ -601,7 +640,7 @@ impl Parser {
                 let expr = self.parse_latex_grouping()?;
 
                 data.accepted();
-                Some(EverythingElse::Root(Root { nth, expr }))
+                Ok(EverythingElse::Root(Root { nth, expr }))
             }
             Token::Identifier(func) => {
                 let func = func.clone();
@@ -612,9 +651,11 @@ impl Parser {
                 }
 
                 let power = if data.advance_if_eq(&Token::Punct(Punctuation::Exp)) {
-                    data.eq_else_none(&Token::Punct(Punctuation::LeftLatexCurly))?;
+                    data.eq_else_none(&Token::Punct(Punctuation::LeftLatexCurly))
+                        .wrap_err("Exp missing curly brace")?;
                     let expr = self.parse_expression()?;
-                    data.eq_else_none(&Token::Punct(Punctuation::RightLatexCurly))?;
+                    data.eq_else_none(&Token::Punct(Punctuation::RightLatexCurly))
+                        .wrap_err("Exp not closed")?;
 
                     Some(expr)
                 } else {
@@ -630,10 +671,11 @@ impl Parser {
                         seperated by &Token::Punct(Punctuation::Comma)
                     );
 
-                    data.eq_else_none(&Token::Punct(Punctuation::RightParen))?;
+                    data.eq_else_none(&Token::Punct(Punctuation::RightParen))
+                        .wrap_err("FuncCall not closed")?;
 
                     data.accepted();
-                    Some(EverythingElse::Call(FunctionCall {
+                    Ok(EverythingElse::Call(FunctionCall {
                         func: Ident(func),
                         params: exprs,
                         prime_count,
@@ -643,8 +685,8 @@ impl Parser {
                     let expr = EverythingElse::Ident(Ident(func));
                     data.accepted();
                     match power {
-                        None => Some(expr),
-                        Some(power) => Some(EverythingElse::Grouping(Grouping {
+                        None => Ok(expr),
+                        Some(power) => Ok(EverythingElse::Grouping(Grouping {
                             expr: Expression {
                                 expr: Box::new(Everything::Below(MultiplyOrBelow::Below(
                                     PostfixOrBelow::Power(Power {
@@ -659,20 +701,20 @@ impl Parser {
             }
             &Token::Number(num) => {
                 data.accepted();
-                Some(EverythingElse::Number(Number(num)))
+                Ok(EverythingElse::Number(Number(num)))
             }
-            _ => None,
+            _tok => Err(eyre!("Unknown token for EverythingElse: {_tok:?}")),
         }
     }
 
-    fn parse_postfix(&mut self) -> Option<PostfixOrBelow> {
+    fn parse_postfix(&mut self) -> Result<PostfixOrBelow> {
         log!("parsing postfix");
 
         // skip immediately because multiplication will always parse this after
-        let token = unsafe { self.data.peek() }?;
+        let token = unsafe { self.data.peek() }.wrap_err(NO_TOKENS_LEFT)?;
         if Parser::is_skip_token(token) {
             log!("SKIPPING TOKEN {token:?}");
-            return None;
+            return Err(eyre!("Token skipped: {token:?}"));
         }
 
         log!("status: {:?}", self.data);
@@ -692,24 +734,28 @@ impl Parser {
                     });
                 }
                 Some(Token::Punct(Punctuation::LeftSquare)) => {
-                    if let Some(index) = (|| {
+                    if let Ok(index) = (|| -> Result<_> {
                         let guard = self.data.guard_denied();
                         let index = self.parse_expression()?;
-                        guard.eq_else_none(&Token::Punct(Punctuation::RightSquare))?;
+                        guard
+                            .eq_else_none(&Token::Punct(Punctuation::RightSquare))
+                            .wrap_err("List indexing not closed")?;
                         guard.accepted();
-                        Some(index)
+                        Ok(index)
                     })() {
                         data.accepted();
                         current = PostfixOrBelow::Indexing(ListIndexing {
                             list: Box::new(current),
                             index,
                         });
-                    } else if let Some(list) = (|| {
+                    } else if let Ok(list) = (|| -> Result<_> {
                         let guard = self.data.guard_denied();
                         let index = self.parse_list_contents()?;
-                        guard.eq_else_none(&Token::Punct(Punctuation::RightSquare))?;
+                        guard
+                            .eq_else_none(&Token::Punct(Punctuation::RightSquare))
+                            .wrap_err("List indexing not closed")?;
                         guard.accepted();
-                        Some(index)
+                        Ok(index)
                     })() {
                         data.accepted();
                         current = PostfixOrBelow::Indexing(ListIndexing {
@@ -720,12 +766,14 @@ impl Parser {
                                 ))),
                             },
                         });
-                    } else if let Some(filter) = (|| {
+                    } else if let Ok(filter) = (|| -> Result<_> {
                         let guard = self.data.guard_denied();
                         let index = self.parse_conditional()?;
-                        guard.eq_else_none(&Token::Punct(Punctuation::RightSquare))?;
+                        guard
+                            .eq_else_none(&Token::Punct(Punctuation::RightSquare))
+                            .wrap_err("List filtering not closed")?;
                         guard.accepted();
-                        Some(index)
+                        Ok(index)
                     })() {
                         data.accepted();
                         current = PostfixOrBelow::Filtering(ListFiltering {
@@ -733,7 +781,7 @@ impl Parser {
                             filter,
                         });
                     } else {
-                        return None;
+                        return Err(eyre!("No match for indexing-like operation"));
                     }
                 }
                 Some(Token::Punct(Punctuation::Dot)) => {
@@ -742,7 +790,7 @@ impl Parser {
                     let element = match ident.as_str() {
                         "x" => Element::X,
                         "y" => Element::Y,
-                        _ => return None,
+                        _id => return Err(eyre!("Unknown element: {_id}")),
                     };
 
                     data.accepted();
@@ -752,12 +800,12 @@ impl Parser {
                         element,
                     });
                 }
-                _ => break Some(current),
+                _ => break Ok(current),
             }
         }
     }
 
-    fn parse_multiply(&mut self) -> Option<MultiplyOrBelow> {
+    fn parse_multiply(&mut self) -> Result<MultiplyOrBelow> {
         log!("parsing multiply");
         log!("status: {:?}", self.data);
 
@@ -771,7 +819,7 @@ impl Parser {
             if data.advance_if_eq(&Token::Punct(Punctuation::Mult)) {
                 let next = self.parse_postfix()?;
                 exprs.push(next);
-            } else if let Some(next) = self.parse_postfix() {
+            } else if let Ok(next) = self.parse_postfix() {
                 exprs.push(next);
             } else {
                 break;
@@ -780,7 +828,7 @@ impl Parser {
 
         data.accepted();
 
-        Some(if exprs.len() == 1 {
+        Ok(if exprs.len() == 1 {
             let [first] = exprs.try_into().unwrap();
             MultiplyOrBelow::Below(first)
         } else {
@@ -788,7 +836,7 @@ impl Parser {
         })
     }
 
-    fn parse_everything(&mut self) -> Option<Everything> {
+    fn parse_everything(&mut self) -> Result<Everything> {
         log!("parsing everything");
         log!("status: {:?}", self.data);
         let data = self.data.guard_denied();
@@ -807,59 +855,63 @@ impl Parser {
             }
 
             data.accepted();
-            Some(Everything::AddSub(AddSub { exprs, types }))
+            Ok(Everything::AddSub(AddSub { exprs, types }))
         } else if let Some(kind) = first_type {
             data.accepted();
-            Some(Everything::AddSub(AddSub {
+            Ok(Everything::AddSub(AddSub {
                 exprs: vec![first],
                 types: vec![kind],
             }))
         } else {
             data.accepted();
-            Some(Everything::Below(first))
+            Ok(Everything::Below(first))
         }
     }
 
-    fn parse_expression(&mut self) -> Option<Expression> {
+    fn parse_expression(&mut self) -> Result<Expression> {
         log!("parsing expression");
         log!("status: {:?}", self.data);
         self.parse_everything()
             .map(|v| Expression { expr: Box::new(v) })
     }
 
-    fn parse_act_var_def(&mut self) -> Option<ActVarDef> {
+    fn parse_act_var_def(&mut self) -> Result<ActVarDef> {
         log!("parsing act_var_def");
 
         let data = self.data.guard_denied();
         let ident = self.parse_ident()?;
-        data.eq_else_none(&Token::Punct(Punctuation::Equals))?;
+        data.eq_else_none(&Token::Punct(Punctuation::Equals))
+            .wrap_err("Missing equals for ActVarDef")?;
         let expr = self.parse_act_expr()?;
 
         data.accepted();
-        Some(ActVarDef { ident, expr })
+        Ok(ActVarDef { ident, expr })
     }
 
-    fn parse_act_func_def(&mut self) -> Option<ActFuncDef> {
+    fn parse_act_func_def(&mut self) -> Result<ActFuncDef> {
         log!("parsing act_func_def");
 
         let data = self.data.guard_denied();
         let func = self.parse_ident()?;
-        data.eq_else_none(&Token::Punct(Punctuation::LeftParen))?;
+        data.eq_else_none(&Token::Punct(Punctuation::LeftParen))
+            .wrap_err("Missing param list for ActFuncDef")?;
         let mut params = Vec::new();
         push_repeats!(
             self.parse_ident(),
             from data to params,
             seperated by &Token::Punct(Punctuation::Comma)
         );
-        data.eq_else_none(&Token::Punct(Punctuation::RightParen))?;
-        data.eq_else_none(&Token::Punct(Punctuation::Equals))?;
+        data.eq_else_none(&Token::Punct(Punctuation::RightParen))
+            .wrap_err("ActFuncDef param list not closed")?;
+        data.eq_else_none(&Token::Punct(Punctuation::Equals))
+            .wrap_err("Missing equals for ActFuncDef")?;
         let expr = self.parse_act_expr()?;
 
         data.accepted();
-        Some(ActFuncDef { func, params, expr })
+        Ok(ActFuncDef { func, params, expr })
     }
 
-    fn parse_act_expr(&mut self) -> Option<ActExpr> {
+    fn parse_act_expr(&mut self) -> Result<ActExpr> {
         log!("parsing act_expr");
 
         let mut actions = Vec::new();
@@ -872,23 +924,25 @@ impl Parser {
             seperated by &Token::Punct(Punctuation::Comma)
         );
 
-        (!actions.is_empty()).then(|| {
-            data.accepted();
-            ActExpr { actions }
-        })
+        (!actions.is_empty())
+            .then(|| {
+                data.accepted();
+                ActExpr { actions }
+            })
+            .wrap_err("No actions were parsed")
     }
 
-    fn parse_action(&mut self) -> Option<Action> {
+    fn parse_action(&mut self) -> Result<Action> {
         log!("parsing action");
 
         let data = self.data.guard_denied();
-        match data.advance().cloned()? {
+        match data.advance().cloned().wrap_err(NO_TOKENS_LEFT)? {
             Token::Identifier(ident) => {
                 if data.advance_if_eq(&Token::Punct(Punctuation::SimArrow)) {
                     let expr = self.parse_expression()?;
 
                     data.accepted();
-                    Some(Action::Raw(RawAction {
+                    Ok(Action::Raw(RawAction {
                         ident: Ident(ident),
                         expr,
                     }))
@@ -900,37 +954,41 @@ impl Parser {
                         from data to params,
                         seperated by &Token::Punct(Punctuation::Comma)
                     );
-                    data.eq_else_none(&Token::Punct(Punctuation::RightParen))?;
+                    data.eq_else_none(&Token::Punct(Punctuation::RightParen))
+                        .wrap_err("ActFuncCall not closed")?;
 
                     data.accepted();
-                    Some(Action::Call(ActFuncCall {
+                    Ok(Action::Call(ActFuncCall {
                         func: Ident(ident),
                         params,
                     }))
                 } else {
                     data.accepted();
-                    Some(Action::Ident(Ident(ident)))
+                    Ok(Action::Ident(Ident(ident)))
                 }
             }
             Token::Punct(Punctuation::LeftCurly) => {
                 let cond = self.parse_conditional()?;
-                data.eq_else_none(&Token::Punct(Punctuation::Colon))?;
+                data.eq_else_none(&Token::Punct(Punctuation::Colon))
+                    .wrap_err("ActIfElse missing yes case")?;
                 let yes = self.parse_act_expr()?;
                 if data.advance_if_eq(&Token::Punct(Punctuation::Comma)) {
                     let no = self.parse_act_expr()?;
-                    data.eq_else_none(&Token::Punct(Punctuation::RightCurly))?;
+                    data.eq_else_none(&Token::Punct(Punctuation::RightCurly))
+                        .wrap_err("ActIfElse not closed")?;
 
                     data.accepted();
-                    Some(Action::IfElse(ActIfElse {
+                    Ok(Action::IfElse(ActIfElse {
                         cond,
                         yes,
                         no: Some(no),
                     }))
                 } else {
-                    data.eq_else_none(&Token::Punct(Punctuation::RightCurly))?;
+                    data.eq_else_none(&Token::Punct(Punctuation::RightCurly))
+                        .wrap_err("ActIfElse not closed")?;
 
                     data.accepted();
-                    Some(Action::IfElse(ActIfElse {
+                    Ok(Action::IfElse(ActIfElse {
                         cond,
                         yes,
                         no: None,
@@ -939,11 +997,12 @@ impl Parser {
             }
             Token::Punct(Punctuation::LeftParen) => {
                 let expr = self.parse_act_expr()?;
-                data.eq_else_none(&Token::Punct(Punctuation::RightParen))?;
+                data.eq_else_none(&Token::Punct(Punctuation::RightParen))
+                    .wrap_err("ActGrouping not closed")?;
                 data.accepted();
-                Some(Action::Grouping(ActGrouping { expr }))
+                Ok(Action::Grouping(ActGrouping { expr }))
             }
-            _ => None,
+            _tok => Err(eyre!("Unknown token for action: {_tok:?}")),
         }
     }
 }

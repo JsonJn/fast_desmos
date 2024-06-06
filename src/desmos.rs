@@ -1,13 +1,20 @@
-use regex::Regex;
 use std::fs;
+use std::io::{stdout, Write};
 use std::path::Path;
+use std::sync::mpsc::Sender;
 
+use eyre::{ContextCompat, Result, WrapErr};
+use regex::Regex;
+use reqwest::blocking::Response;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 
 use crate::desmos::evaluate::{Color, EvalExpr, ToEval};
 use crate::desmos::execute::actions::{ActExpr, ToActExpr};
 use crate::desmos::parsing::{Lexer, Parser, Statement};
+use crate::desmos::rendering::drawables::{
+    DrawColor, FillOptions, Label, LineOptions, ParametricDomain, PointOptions,
+};
 
 pub mod evaluate;
 pub mod execute;
@@ -15,18 +22,15 @@ pub mod parsing;
 pub mod rendering;
 mod value;
 
-use crate::desmos::rendering::drawables::{
-    DrawColor, FillOptions, Label, LineOptions, ParametricDomain, PointOptions,
-};
-
 pub struct OnOff<T> {
     state: OnOffState,
     data: T,
 }
 
 mod sealed {
-    use super::*;
     use std::fmt::{Debug, Formatter};
+
+    use super::*;
 
     #[allow(dead_code)]
     #[derive(Debug)]
@@ -130,14 +134,19 @@ impl WebCache {
             .and_then(|_| serde_json::from_str(&fs::read_to_string(path).ok()?).ok())
     }
 
-    pub fn cached_or_else(id: &str, or: impl FnOnce() -> CacheData) -> Self {
+    pub fn cached_or_else(id: &str, or: impl FnOnce() -> Option<CacheData>) -> Option<Self> {
         let x = Self::cached();
         if x.as_ref().is_some_and(|cache| cache.id == id) {
-            x.unwrap()
+            Some(x.unwrap())
         } else {
-            Self {
-                id: id.to_string(),
-                data: or(),
+            let value = or();
+            if let Some(or) = value {
+                Some(Self {
+                    id: id.to_string(),
+                    data: or,
+                })
+            } else {
+                None
             }
         }
     }
@@ -207,44 +216,76 @@ pub struct Clickable {
     pub expr: ActExpr,
 }
 
-fn parse_expr_v(s: &serde_json::Value) -> EvalExpr {
-    let text = s.as_str().unwrap().to_string();
+fn parse_expr_v(s: &serde_json::Value) -> Result<EvalExpr> {
+    let text = s.as_str().wrap_err("Not a string")?.to_string();
     // println!("{text}");
-    let text = Lexer::lex(text).unwrap().0;
-    Parser::parse_expr(text).unwrap().to_eval()
+    let text = Lexer::lex(text).wrap_err("Lexing failed")?.0;
+    Parser::parse_expr(text).map(ToEval::to_eval)
 }
 
-fn parse_expr_v_option(s: &serde_json::Value) -> Option<EvalExpr> {
-    let text = s.as_str()?.to_string();
-    // println!("{text}");
-    let text = Lexer::lex(text)?.0;
-    Some(Parser::parse_expr(text)?.to_eval())
-}
-
-fn parse_stmt_v(s: &serde_json::Value) -> Statement {
-    let string = s.as_str().unwrap().to_string();
+fn parse_stmt_v(s: &serde_json::Value) -> Result<Statement> {
+    let string = s.as_str().wrap_err("Not a string")?.to_string();
     // if string.len() < 1000 {
     //     println!("{string}");
     // } else {
     //     println!("too long!");
     // }
     // println!("{string}");
-    let (lexed, _) = Lexer::lex(string).expect("Statement lexing failed!");
+    let (lexed, _) = Lexer::lex(string).wrap_err("Lexing failed")?;
     // println!("{lexed:?}");
-    Parser::parse(lexed).expect("Statement parsing failed!")
+    Parser::parse(lexed)
 }
 
-fn parse_act_expr(s: &serde_json::Value) -> ActExpr {
-    let s = s.as_str().unwrap().to_string();
+fn parse_act_expr(s: &serde_json::Value) -> Result<ActExpr> {
+    let s = s.as_str().wrap_err("Not a string")?.to_string();
     // println!("{s:?}");
-    Parser::parse_action_expr(Lexer::lex(s).unwrap().0)
-        .expect("ActExpr parsing failed!")
-        .to_act_expr()
+    Parser::parse_action_expr(Lexer::lex(s).wrap_err("Lexing failed")?.0)
+        .map(ToActExpr::to_act_expr)
 }
 
 impl DesmosPage {
-    pub fn from_url(url: &str) -> Option<Self> {
-        let url = Url::parse(url).unwrap();
+    pub fn from_url(url: Url, updates: Option<Sender<String>>) -> Result<Self> {
+        let send = |msg| {
+            if let Some(updates) = &updates {
+                let _ = updates.send(msg);
+            }
+        };
+
+        send("Starting parse procedure.".to_string());
+
+        fn try_get_page(url: &Url, send: impl Fn(String)) -> Option<Response> {
+            let mut request_count = 0;
+            loop {
+                send(if request_count == 0 {
+                    "Requesting...".to_string()
+                } else {
+                    format!("Retrying request, attempt {request_count}")
+                });
+                let _ = stdout().flush();
+                let get = reqwest::blocking::get(url.clone());
+
+                request_count += 1;
+                match get {
+                    Ok(x) => {
+                        send("Success!".to_string());
+                        break Some(x);
+                    }
+                    Err(e) => {
+                        if let Some(status) = e.status() {
+                            send(format!(
+                                "Network error: {status:?} {}",
+                                status.canonical_reason().unwrap_or("")
+                            ));
+                        } else if e.is_timeout() {
+                            send("Network error: connection timed out.".to_string());
+                        } else {
+                            send(format!("Network error: {e}"));
+                        }
+                    }
+                }
+            }
+        }
+
         let ident = url
             .path_segments()
             .unwrap()
@@ -252,44 +293,40 @@ impl DesmosPage {
             .unwrap()
             .to_string();
 
+        send(format!("uid is {ident}"));
+
         let cached = &WebCache::cached_or_else(&ident, || {
             let json_url = format!("https://www.desmos.com/calc-states/production/{ident}");
-            let page = reqwest::blocking::get(json_url).unwrap().text().unwrap();
+            let json_url = Url::parse(&json_url).unwrap_or_else(|_| unreachable!());
+            send("Downloading json data...".to_string());
+            let page = try_get_page(&json_url, send)?.text().unwrap();
 
-            let pattern =
-                Regex::new("<meta property=\"og:title\" content=\"([^\"]*)\" />").unwrap();
+            let pattern = Regex::new(r#"<meta property="og:title" content="([^"]*)" />"#).unwrap();
 
-            let mut request_count = 0;
-            let html = loop {
-                request_count += 1;
-                println!("Downloading webpage attempt {request_count}");
-                let get = reqwest::blocking::get(url.clone());
-                if let Ok(x) = get {
-                    break x;
-                } else if request_count >= 20 {
-                    panic!("Too many retries: greater than 20.")
-                }
-            }
-            .text()
-            .unwrap();
-
+            send("Downloading HTML for page title...".to_string());
+            let html = try_get_page(&url, send)?.text().unwrap();
             let mat = pattern.captures(&html).expect("Title not found.");
             let title = mat.get(1).unwrap().as_str().to_string();
 
-            CacheData { page, title }
+            Some(CacheData { page, title })
         })
+        .wrap_err("Failed to obtain data.")?
         .data;
 
         let title = cached.title.clone();
 
         let json: serde_json::Value = serde_json::from_str(&cached.page).unwrap();
-        let json = json.as_object()?;
+        let json = json.as_object().wrap_err("JSON wasn't an object")?;
 
         let viewport = json
-            .get("graph")?
-            .as_object()?
-            .get("viewport")?
-            .as_object()?;
+            .get("graph")
+            .wrap_err("JSON doesn't contain key `graph`")?
+            .as_object()
+            .wrap_err("`graph` isn't an object")?
+            .get("viewport")
+            .wrap_err("`graph` doesn't contain key `viewport`")?
+            .as_object()
+            .wrap_err("`viewport` isn't an object")?;
         let [x_min, x_max, y_min, y_max] = ["xmin", "xmax", "ymin", "ymax"].map(|key| {
             viewport
                 .get(key)
@@ -305,8 +342,16 @@ impl DesmosPage {
             y_range: (y_min, y_max),
         };
 
-        let expressions = json.get("expressions")?.as_object()?;
-        let expr_list = expressions.get("list")?.as_array()?;
+        let expressions = json
+            .get("expressions")
+            .wrap_err("JSON doesn't contain key `expressions`")?
+            .as_object()
+            .wrap_err("`expressions` isn't an object")?;
+        let expr_list = expressions
+            .get("list")
+            .wrap_err("`expressions` doesn't contain key `list`")?
+            .as_array()
+            .wrap_err("`list` isn't an array")?;
 
         let ticker = expressions.get("ticker").and_then(|x| x.as_object());
 
@@ -321,45 +366,101 @@ impl DesmosPage {
             )
         });
 
-        let ticker = ticker.map(|ticker| Ticker {
-            expr: parse_act_expr(ticker.get("handlerLatex").unwrap()),
-        });
+        /// Takes as input an expr returning `Option<eyre::Result<T>>`
+        /// and returns the program, optionally wrapping, if it is
+        /// `Some(Err(_))`
+        macro_rules! fail {
+            ($expr:expr, $msg:expr) => {{
+                use eyre::WrapErr as _;
+                if let Some(x) = $expr {
+                    Some(x.wrap_err($msg)?)
+                } else {
+                    None
+                }
+            }};
+            ($expr:expr) => {{
+                if let Some(x) = $expr {
+                    Some(x?)
+                } else {
+                    None
+                }
+            }};
+        }
 
-        let cells = expr_list
-            .iter()
-            .filter_map(|expr| {
-                let expr = expr.as_object()?;
+        let ticker = fail!(
+            ticker.map(|ticker| ticker
+                .get("handlerLatex")
+                .wrap_err("`ticker` doesn't contain `handlerLatex`")
+                .and_then(parse_act_expr)),
+            "Ticker obtaining failed"
+        )
+        .map(|ticker| Ticker { expr: ticker });
 
-                let kind = expr.get("type")?.as_str()?;
+        let mut cells = Vec::new();
+        for expr in expr_list {
+            let expr = expr.as_object().wrap_err("cell isn't an object")?;
 
-                if kind == "expression" {
-                    let statement = parse_stmt_v(expr.get("latex")?);
+            let kind = expr
+                .get("type")
+                .wrap_err("cell has no type")?
+                .as_str()
+                .wrap_err("cell type isn't a string")?;
+
+            if kind == "expression" && expr.get("latex").is_some() {
+                let cell = (|| -> Result<_> {
+                    let statement = parse_stmt_v(
+                        expr.get("latex")
+                            .unwrap_or_else(|| unreachable!("Checked by outer if statement")),
+                    )
+                    .wrap_err("expr latex couldn't be parsed")?;
 
                     // Color
-                    let color = Color::from_hex(expr.get("color")?.as_str().unwrap());
-                    let latex = expr.get("colorLatex").map(parse_expr_v);
+                    let color = Color::from_hex(
+                        expr.get("color")
+                            .wrap_err("expr has no color")?
+                            .as_str()
+                            .unwrap(),
+                    );
+                    let latex = fail!(
+                        expr.get("colorLatex").map(parse_expr_v),
+                        "expr colorLatex couldn't be parsed"
+                    );
                     let draw_color = DrawColor { color, latex };
 
                     // Point options
                     let point_on_off = expr.get("points").map(|v| v.as_bool().unwrap()).into();
                     let point_options = {
-                        let opacity = expr.get("pointOpacity").map(parse_expr_v);
-                        let diameter = expr.get("pointSize").map(parse_expr_v);
+                        let opacity = fail!(
+                            expr.get("pointOpacity").map(parse_expr_v),
+                            "pointOpacity couldn't be parsed"
+                        );
+                        let diameter = fail!(
+                            expr.get("pointSize").map(parse_expr_v),
+                            "pointSize couldn't be parsed"
+                        );
 
                         let label = expr
                             .get("showLabel")
                             .map(|v| v.as_bool().unwrap())
                             .unwrap_or(false);
 
-                        let label = label.then(|| {
+                        let label = if label {
                             let label = expr.get("label").map(|v| v.as_str().unwrap().to_string());
-                            let label_size = expr.get("labelSize").map(parse_expr_v);
-                            let label_angle = expr.get("labelAngle").map(parse_expr_v);
+                            let label_size = fail!(
+                                expr.get("labelSize").map(parse_expr_v),
+                                "labelSize couldn't be parsed"
+                            );
+                            let label_angle = fail!(
+                                expr.get("labelAngle").map(parse_expr_v),
+                                "labelAngle couldn't be parsed"
+                            );
 
                             label.map(|i| Label::from_options(Some(i), label_size, label_angle))
-                        });
+                        } else {
+                            None
+                        };
 
-                        PointOptions::from_options(diameter, opacity, label, None)
+                        PointOptions::from_options(diameter, opacity, label.map(Some), None)
                     };
                     let point_options = OnOff::new(point_on_off, point_options);
 
@@ -367,8 +468,14 @@ impl DesmosPage {
                     let line_on_off = expr.get("lines").map(|v| v.as_bool().unwrap()).into();
 
                     let line_options = {
-                        let opacity = expr.get("lineOpacity").map(parse_expr_v);
-                        let thickness = expr.get("lineWidth").map(parse_expr_v);
+                        let opacity = fail!(
+                            expr.get("lineOpacity").map(parse_expr_v),
+                            "lineOpacity couldn't be parsed"
+                        );
+                        let thickness = fail!(
+                            expr.get("lineWidth").map(parse_expr_v),
+                            "lineWidth couldn't be parsed"
+                        );
                         LineOptions::from_options(thickness, opacity, None)
                     };
                     let line_options = OnOff::new(line_on_off, line_options);
@@ -376,7 +483,10 @@ impl DesmosPage {
                     // Fill options
                     let fill_on_off = expr.get("fill").map(|v| v.as_bool().unwrap()).into();
                     let fill_options = {
-                        let opacity = expr.get("fillOpacity").map(parse_expr_v);
+                        let opacity = fail!(
+                            expr.get("fillOpacity").map(parse_expr_v),
+                            "fillOpacity couldn't be parsed"
+                        );
                         FillOptions::from_options(opacity)
                     };
                     let fill_options = OnOff::new(fill_on_off, fill_options);
@@ -384,8 +494,8 @@ impl DesmosPage {
                     // Parametric Domain
                     let domain = expr.get("parametricDomain").map(|v| {
                         let obj = v.as_object().unwrap();
-                        let min = obj.get("min").and_then(parse_expr_v_option);
-                        let max = obj.get("max").and_then(parse_expr_v_option);
+                        let min = obj.get("min").and_then(|x| parse_expr_v(x).ok());
+                        let max = obj.get("max").and_then(|x| parse_expr_v(x).ok());
                         ParametricDomain::from_options(min, max)
                     });
 
@@ -394,13 +504,16 @@ impl DesmosPage {
                         .map(|v| v.as_bool().unwrap())
                         .unwrap_or(false);
 
-                    let clickable = expr.get("clickableInfo").and_then(|v| {
+                    let clickable = fail!(expr.get("clickableInfo").map(|v| -> Result<_> {
                         let clickable = v.as_object().unwrap();
                         // println!("{clickable:?}");
-                        Some(Clickable {
-                            expr: parse_act_expr(clickable.get("latex")?),
+                        Ok(Clickable {
+                            expr: parse_act_expr(
+                                clickable.get("latex").wrap_err("Clickable has no latex")?,
+                            )
+                            .wrap_err("Clickable latex couldn't be parsed")?,
                         })
-                    });
+                    }));
 
                     // Drag Mode
                     let drag_mode = expr.get("dragMode").map(|v| {
@@ -415,7 +528,7 @@ impl DesmosPage {
                     });
 
                     // Slider bounds
-                    let slider = expr.get("slider").map(|v| {
+                    let slider = fail!(expr.get("slider").map(|v| -> Result<_> {
                         let obj = v.as_object().unwrap();
 
                         fn is_true_at(
@@ -425,18 +538,27 @@ impl DesmosPage {
                             x.get(name).map(|v| v.as_bool().unwrap()).unwrap_or(false)
                         }
 
-                        let step = obj.get("step").map(parse_expr_v);
-                        let min = is_true_at(obj, "hardMin")
-                            .then(|| obj.get("min").map(parse_expr_v))
-                            .flatten();
-                        let max = is_true_at(obj, "hardMax")
-                            .then(|| obj.get("max").map(parse_expr_v))
-                            .flatten();
+                        let step = fail!(
+                            obj.get("step").map(parse_expr_v),
+                            "slider step couldn't be parsed"
+                        );
+                        let min = fail!(
+                            is_true_at(obj, "hardMin")
+                                .then(|| obj.get("min").map(parse_expr_v))
+                                .flatten(),
+                            "slider min couldn't be parsed"
+                        );
+                        let max = fail!(
+                            is_true_at(obj, "hardMax")
+                                .then(|| obj.get("max").map(parse_expr_v))
+                                .flatten(),
+                            "slider max couldn't be parsed"
+                        );
 
-                        SliderBounds { min, max, step }
-                    });
+                        Ok(SliderBounds { min, max, step })
+                    }));
 
-                    Some(DesmosCell {
+                    Ok(DesmosCell {
                         statement,
                         draw_color,
                         options: Options {
@@ -450,13 +572,14 @@ impl DesmosPage {
                         clickable,
                         slider,
                     })
-                } else {
-                    None
-                }
-            })
-            .collect();
+                })()
+                .wrap_err_with(|| format!("expr couldn't be parsed: {expr:?}"))?;
 
-        Some(DesmosPage {
+                cells.push(cell);
+            }
+        }
+
+        Ok(DesmosPage {
             cells,
             title,
             min_steps_ms,

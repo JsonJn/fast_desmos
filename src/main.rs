@@ -1,10 +1,9 @@
 // #![allow(dead_code)]
 #![warn(clippy::semicolon_if_nothing_returned, clippy::uninlined_format_args)]
 
-use crate::desmos::DesmosPage;
-
 mod desmos;
 mod gamma;
+mod ui;
 
 mod iterator;
 mod pooled_vec;
@@ -13,7 +12,7 @@ mod tests;
 mod vec_map;
 mod vecs;
 
-macro_rules! strings {
+macro_rules! urls {
     (
         $($name:ident = $str:literal);*
         $(;)?
@@ -27,8 +26,8 @@ macro_rules! strings {
 
 fn main() {
     // use desmos::parsing::{Lexer, Parser};
-    // let raw = r#"\left\{a_{0}>b_{0}:\left[\right],\left[a_{0}...b_{0}\right]\right\}"#.to_string();
-    // let (lexed, _left) = Lexer::lex(raw).unwrap();
+    // let raw = r#"\left\{\left\{\left|p_{new}.x\right|>L\right\}\left\{v.xp_{new}.x>0\right\}=1:-1,1\right\}"#;
+    // let (lexed, _left) = Lexer::lex(raw.to_string()).unwrap();
     // let parsed = Parser::parse(lexed).unwrap();
     // println!("{parsed:#?}");
     // return;
@@ -56,24 +55,24 @@ fn main() {
     //     return;
     // }
 
-    strings! {
-        GRAVITY_IDEAL_GAS = "https://www.desmos.com/calculator/dwazp7zubl";
-        IDEAL_GAS = "https://www.desmos.com/calculator/ht6vnqkrxx";
-        ANALYTIC_IDEAL_GAS = "https://www.desmos.com/calculator/kjrqurcozt";
-        SPINNY_CUBE = "https://www.desmos.com/calculator/epretb6vnj";
-        SNUB_SQUARE = "https://www.desmos.com/calculator/jroixxyk1e";
-        VECTOR_FIELD = "https://www.desmos.com/calculator/g25eqqco4m";
-        TIC_TAC_TOE = "https://www.desmos.com/calculator/le77826l07";
-        POINT_SIZES = "https://www.desmos.com/calculator/xaee0lvsnc";
-        MANY_POINT_SIZES = "https://www.desmos.com/calculator/oaho9ryxo1";
-        SPECIAL_CONNECT_4 = "https://www.desmos.com/calculator/2f5sqp3fok";
-        FLICKERING_POINTS = "https://www.desmos.com/calculator/xbebofu2lk";
-        BLINDMOKU = "https://www.desmos.com/calculator/w6dk818fbz";
-        D20 = "https://www.desmos.com/calculator/y0s6d3xy4t";
-    }
-
-    let desmos = DesmosPage::from_url(SPECIAL_CONNECT_4).unwrap();
-    desmos::rendering::window(desmos);
+    // urls! {
+    //     GRAVITY_IDEAL_GAS = "https://www.desmos.com/calculator/dwazp7zubl";
+    //     IDEAL_GAS = "https://www.desmos.com/calculator/ht6vnqkrxx";
+    //     ANALYTIC_IDEAL_GAS = "https://www.desmos.com/calculator/kjrqurcozt";
+    //     SPINNY_CUBE = "https://www.desmos.com/calculator/epretb6vnj";
+    //     SNUB_SQUARE = "https://www.desmos.com/calculator/jroixxyk1e";
+    //     VECTOR_FIELD = "https://www.desmos.com/calculator/g25eqqco4m";
+    //     TIC_TAC_TOE = "https://www.desmos.com/calculator/le77826l07";
+    //     POINT_SIZES = "https://www.desmos.com/calculator/xaee0lvsnc";
+    //     MANY_POINT_SIZES = "https://www.desmos.com/calculator/oaho9ryxo1";
+    //     SPECIAL_CONNECT_4 = "https://www.desmos.com/calculator/2f5sqp3fok";
+    //     FLICKERING_POINTS = "https://www.desmos.com/calculator/xbebofu2lk";
+    //     BLINDMOKU = "https://www.desmos.com/calculator/w6dk818fbz";
+    //     D20 = "https://www.desmos.com/calculator/y0s6d3xy4t";
+    // }
+    //
+    let page = ui::input_url(2);
+    desmos::rendering::window(page);
 
     // println!("{:?}", size_of::<EvalTree>());
     // pooled_tests();

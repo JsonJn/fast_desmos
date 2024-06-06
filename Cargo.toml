@@ -24,6 +24,7 @@ raylib = "5.0.1"
 regex = "1.10.4"
 rustc-hash = "1.1.0"
 take_mut = "0.2.2"
+eyre = "0.6.12"
 
 [dependencies.serde]
 features = ["derive"]
