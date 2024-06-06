@@ -38,7 +38,7 @@ Below is a full list of supported and to-be-supported features:
     - [ ] Curved explicit equations
 - [x] Polygons
     - [x] Polygons with custom fill, lines, **but not line type**
-- [ ] Points
+- [x] Points
     - [x] Points with custom sizes, opacity, **but not point type**
     - [x] draggable
         - [x] draggable on both or no axis
