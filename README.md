@@ -34,17 +34,15 @@ Below is a full list of supported and to-be-supported features:
     - [ ] Curved parametrics
 - [ ] Explicit Equations
     - [x] Straight line explicit equations with explicit bounds, like like `y = 1 {0 < x < 2}`
-    - [ ] Straight line explicit equations without bounds
+    - [x] Straight line explicit equations without bounds
     - [ ] Curved explicit equations
-- [ ] Polygons
+- [x] Polygons
     - [x] Polygons with custom fill, lines, **but not line type**
-    - [ ] line type
 - [ ] Points
     - [x] Points with custom sizes, opacity, **but not point type**
     - [x] draggable
         - [x] draggable on both or no axis
         - [x] draggable on only x-axs or y-axis
-    - [ ] point type
 - [x] Custom colors (`rgb`, `hsv`)
 - [x] All Builtin functions **except for distributions**
 - [x] Most desmos syntax (if-else, sum, prod, fractions, etc) **except for calculus**
@@ -63,13 +61,5 @@ Have Rust installed, clone the repository, run `cargo run --release` in the proj
 
 ## Usage
 
-Better ergonomics is planned for the future, but for now, go into `main.rs`, and change the URL used.
-
-```Rust
-fn main() {
-    //                               This part is the URL
-    //                                vvvvvvvvvvvvvvvvv
-    let desmos = DesmosPage::from_url(SPECIAL_CONNECT_4).unwrap();
-    //                                ^^^^^^^^^^^^^^^^^
-}
-```
+Run the program, and input the desmos url into the box, using either the paste clipboard button or typing it manually.
+Then press the load button.
