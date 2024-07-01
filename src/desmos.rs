@@ -3,11 +3,12 @@ use std::io::{stdout, Write};
 use std::path::Path;
 use std::sync::mpsc::Sender;
 
-use eyre::{ContextCompat, Result, WrapErr};
+use eyre::{ContextCompat, OptionExt, Result, WrapErr};
 use regex::Regex;
-use reqwest::blocking::Response;
-use reqwest::Url;
 use serde::{Deserialize, Serialize};
+use ureq;
+use ureq::Response;
+use url::Url;
 
 use crate::desmos::evaluate::{Color, EvalExpr, ToEval};
 use crate::desmos::execute::actions::{ActExpr, ToActExpr};
@@ -262,7 +263,7 @@ impl DesmosPage {
                     format!("Retrying request, attempt {request_count}")
                 });
                 let _ = stdout().flush();
-                let get = reqwest::blocking::get(url.clone());
+                let get = ureq::request_url("GET", url).call();
 
                 request_count += 1;
                 match get {
@@ -271,16 +272,7 @@ impl DesmosPage {
                         break Some(x);
                     }
                     Err(e) => {
-                        if let Some(status) = e.status() {
-                            send(format!(
-                                "Network error: {status:?} {}",
-                                status.canonical_reason().unwrap_or("")
-                            ));
-                        } else if e.is_timeout() {
-                            send("Network error: connection timed out.".to_string());
-                        } else {
-                            send(format!("Network error: {e}"));
-                        }
+                        send(format!("Network error: {e}"));
                     }
                 }
             }
@@ -288,10 +280,8 @@ impl DesmosPage {
 
         let ident = url
             .path_segments()
-            .unwrap()
-            .next_back()
-            .unwrap()
-            .to_string();
+            .and_then(|x| x.rev().next())
+            .ok_or_eyre("No last path segment was found.")?;
 
         send(format!("uid is {ident}"));
 
@@ -299,12 +289,12 @@ impl DesmosPage {
             let json_url = format!("https://www.desmos.com/calc-states/production/{ident}");
             let json_url = Url::parse(&json_url).unwrap_or_else(|_| unreachable!());
             send("Downloading json data...".to_string());
-            let page = try_get_page(&json_url, send)?.text().unwrap();
+            let page = try_get_page(&json_url, send)?.into_string().unwrap();
 
             let pattern = Regex::new(r#"<meta property="og:title" content="([^"]*)" />"#).unwrap();
 
             send("Downloading HTML for page title...".to_string());
-            let html = try_get_page(&url, send)?.text().unwrap();
+            let html = try_get_page(&url, send)?.into_string().unwrap();
             let mat = pattern.captures(&html).expect("Title not found.");
             let title = mat.get(1).unwrap().as_str().to_string();
 
@@ -455,7 +445,9 @@ impl DesmosPage {
                                 "labelAngle couldn't be parsed"
                             );
 
-                            label.map(|i| Label::from_options(Some(i), label_size, label_angle))
+                            label.map(|i| {
+                                Label::from_options(Some(i.clone()), label_size, label_angle)
+                            })
                         } else {
                             None
                         };

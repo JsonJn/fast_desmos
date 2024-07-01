@@ -1,9 +1,10 @@
-use crate::pooled_vec::Id;
 use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter};
 use std::iter;
 use std::sync::atomic::AtomicU32;
 use std::sync::{atomic, OnceLock};
+
+use rand::Rng;
 
 use crate::desmos::evaluate::constness::CanConst;
 use crate::desmos::evaluate::context::{Functions, ValueContext};
@@ -19,6 +20,7 @@ use crate::desmos::value::{
     Color, CompList, CompPrim, Computable, Point, Polygon, PrimList, Primitive, VarValue,
 };
 use crate::gamma::gamma;
+use crate::pooled_vec::Id;
 use crate::pooled_vec::PooledVec;
 use crate::take_pat;
 use crate::vec_map::AsIndex;
@@ -530,17 +532,18 @@ impl Builtins {
                 _ => unreachable!("Sort must take 1 or 2 parameters"),
             },
             Builtins::Random => match params.len() {
-                0 => VarValue::number(fastrand::f64()),
+                0 => VarValue::number(rand::random()),
                 1 => {
                     let [param] = params.try_into().unwrap();
                     match param {
                         VarValue::Prim(p) => {
                             if let Primitive::Computable(CompPrim::Number(amt)) = p {
                                 let amt = amt.round() as usize;
+                                let mut gen = rand::thread_rng();
                                 let ns = PooledVec::from_iter(
                                     &POOL_NUMBER,
                                     id,
-                                    (0..amt).map(|_| fastrand::f64()),
+                                    (0..amt).map(|_| gen.gen()),
                                 );
                                 VarValue::num_list(ns)
                             } else {
@@ -549,7 +552,7 @@ impl Builtins {
                         }
                         VarValue::List(l) => {
                             let len = l.len();
-                            let index = fastrand::usize(0..len);
+                            let index = rand::thread_rng().gen_range(0..len);
                             VarValue::Prim(l.get_cloned(index))
                         }
                     }
@@ -567,7 +570,7 @@ impl Builtins {
                     let mut chosen = PooledVec::with_capacity(&POOL_INDICES, id, amt);
                     for _ in 0..amt {
                         loop {
-                            let index = fastrand::usize(0..list.len());
+                            let index = rand::thread_rng().gen_range(0..list.len());
                             if !chosen.contains(&index) {
                                 chosen.push(index);
                                 break;

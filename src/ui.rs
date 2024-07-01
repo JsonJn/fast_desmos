@@ -5,12 +5,12 @@ use std::{process, thread};
 
 use crate::desmos::DesmosPage;
 use raylib::prelude::*;
-use reqwest::Url;
+use url::Url;
 
 pub fn input_url(sc: i32) -> DesmosPage {
     const F_S: i32 = 20;
     const W: i32 = 600;
-    const H: i32 = 200;
+    const H: i32 = 100;
 
     let scale = |x| x * sc;
 
@@ -137,6 +137,8 @@ pub fn input_url(sc: i32) -> DesmosPage {
                     const DT: &'static str = "https://www.desmos.com/calculator/xxxxxxxxxx";
                     draw.draw_text(DT, tx, ty, F_S * sc, Color::GRAY);
                 } else {
+                    const DT: &'static str = "https://www.desmos.com/calculator/";
+                    draw.draw_text(DT, tx, ty, F_S * sc, Color::GRAY);
                     draw.draw_text(&url, tx, ty, F_S * sc, Color::BLACK);
                 }
 
