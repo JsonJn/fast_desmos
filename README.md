@@ -57,7 +57,14 @@ Below is a full list of supported and to-be-supported features:
 
 ## Running the program
 
+### By building it yourself
+
 Have Rust installed, clone the repository, run `cargo run --release` in the project directory.
+
+### By running the executable
+
+Download the executable from the releases, and run it. **This is untested, there may be issues.**
+It also only supports Windows right now.
 
 ## Usage
 
