@@ -15,12 +15,14 @@ for simulation thanks to its feature of *actions*.
 ### Supported desmos features
 
 Not all desmos features are supported. In fact, **most desmos features that makes a "graphing calculator" aren't
-supported**, such as the ability to draw arbitrary curves, find curve intersections, etc.
+supported**, such as the ability to draw arbitrary curves, find curve intersections, ___calculus___, ___regressions___,
+etc.
 
 What is supported however are features useful for simulation, such as tickers, actions, drawing points and lines and
 simple parametrics, etc.
 
-Below is a full list of supported and to-be-supported features:
+Below is a full list of supported and to-be-supported features, at least for me: (contribution to add other features is
+welcome)
 
 #### Legend:
 
